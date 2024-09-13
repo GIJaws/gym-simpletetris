@@ -1,7 +1,7 @@
 import numpy as np
 import random
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 import pygame
 
 # Adapted from the Tetris engine in the TetrisRL project by jaybutera
@@ -460,19 +460,21 @@ class TetrisEnv(gym.Env):
 
     def step(self, action):
         state, reward, done = self.engine.step(action)
-        state = self._observation(state=state)
-        state = np.array(state, dtype=np.float32)
-
+        observation = self._observation(state=state)
         info = self._get_info()
-        return state, reward, done, info
 
-    def reset(self, return_info=False):
+        # In the modern Gym API, we need to return a boolean for truncated
+        # For Tetris, we can consider the episode as truncated if it's done
+        truncated = done
+
+        return observation, reward, done, truncated, info
+
+    def reset(self, seed=None, options=None):
+        super().reset(seed=seed)
         state = self.engine.clear()
-        state = self._observation(state=state)
-        state = np.array(state, dtype=np.float32)
-
+        observation = self._observation(state=state)
         info = self._get_info()
-        return (state, info) if return_info else state
+        return observation, info
 
     def _observation(self, mode=None, state=None, extend_dims=None):
         obs = state
@@ -500,38 +502,42 @@ class TetrisEnv(gym.Env):
             else:
                 return convert_grayscale_rgb(obs)
 
-    def render(self, mode="human"):
-        if mode == "human":
-            if self.window is None:
-                pygame.init()
-                pygame.display.init()
-                self.window = pygame.display.set_mode(
-                    (self.window_size, self.window_size)
-                )
-            if self.clock is None:
-                self.clock = pygame.time.Clock()
-
-            obs = self.engine.render()
-            obs = np.transpose(obs)
-            obs = convert_grayscale(obs, self.window_size)
-            obs = convert_grayscale_rgb(obs)
-
-            pygame.pixelcopy.array_to_surface(self.window, obs)
-
-            canvas = pygame.surfarray.make_surface(obs)
-
-            self.window.blit(canvas, canvas.get_rect())
-            pygame.event.pump()
-            pygame.display.update()
-
-            self.clock.tick(self.metadata["render_fps"])
-        elif mode == "rgb_array":
-            obs = self.engine.render()
-            obs = convert_grayscale(obs, 160)
-            obs = convert_grayscale_rgb(obs)
-            return obs
+    def render(self):
+        if self.render_mode == "rgb_array":
+            return self._render_rgb_array()
+        elif self.render_mode == "human":
+            return self._render_human()
         else:
-            super(TetrisEnv, self).render(mode=mode)
+            raise ValueError(f"Unsupported render mode: {self.render_mode}")
+
+    def _render_rgb_array(self):
+        obs = self.engine.render()
+        obs = convert_grayscale(obs, 160)
+        return convert_grayscale_rgb(obs)
+
+    def _render_human(self):
+        if self.window is None:
+            pygame.init()
+            pygame.display.init()
+            self.window = pygame.display.set_mode((self.window_size, self.window_size))
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+
+        obs = self.engine.render()
+        obs = np.transpose(obs)
+        obs = convert_grayscale(obs, self.window_size)
+        obs = convert_grayscale_rgb(obs)
+
+        pygame.pixelcopy.array_to_surface(self.window, obs)
+        canvas = pygame.surfarray.make_surface(obs)
+        self.window.blit(canvas, canvas.get_rect())
+        pygame.event.pump()
+        pygame.display.update()
+        self.clock.tick(self.metadata["render_fps"])
 
     def close(self):
-        del self.engine
+        if self.window is not None:
+            pygame.display.quit()
+            pygame.quit()
+            self.window = None
+            self.clock = None

@@ -30,3 +30,4 @@ ghostdriver.log
 # PyCharm project files
 .idea
 vizdoom.ini
+.venv/*

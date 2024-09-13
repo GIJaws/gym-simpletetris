@@ -4,10 +4,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name='gym_simpletetris',
-    version='0.4.0',
-    author="Tristan Russell",
-    license='MIT',
+    name="gym_simpletetris",
+    version="0.5.0",
+    author="Tristan Russell",  # do I put my name here now?
+    license="MIT",
     description="A simple Tetris engine for OpenAI Gym",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -15,9 +15,11 @@ setup(
     project_urls={
         "Bug Tracker": "https://github.com/tristanrussell/gym-simpletetris/issues",
     },
-    install_requires=['gym>=0.21.0',
-                      'numpy>=0.21.0',
-                      'pygame>=2.1.0'],
+    install_requires=[
+        "numpy>=0.21.0",
+        "pygame>=2.1.0",
+        "gymnasium>=0.29.1",
+    ],
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",
