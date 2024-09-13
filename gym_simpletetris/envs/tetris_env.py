@@ -8,15 +8,15 @@ import pygame
 # https://github.com/jaybutera/tetrisRL
 
 shapes = {
-    'T': [(0, 0), (-1, 0), (1, 0), (0, -1)],
-    'J': [(0, 0), (-1, 0), (0, -1), (0, -2)],
-    'L': [(0, 0), (1, 0), (0, -1), (0, -2)],
-    'Z': [(0, 0), (-1, 0), (0, -1), (1, -1)],
-    'S': [(0, 0), (-1, -1), (0, -1), (1, 0)],
-    'I': [(0, 0), (0, -1), (0, -2), (0, -3)],
-    'O': [(0, 0), (0, -1), (-1, 0), (-1, -1)],
+    "T": [(0, 0), (-1, 0), (1, 0), (0, -1)],
+    "J": [(0, 0), (-1, 0), (0, -1), (0, -2)],
+    "L": [(0, 0), (1, 0), (0, -1), (0, -2)],
+    "Z": [(0, 0), (-1, 0), (0, -1), (1, -1)],
+    "S": [(0, 0), (-1, -1), (0, -1), (1, 0)],
+    "I": [(0, 0), (0, -1), (0, -2), (0, -3)],
+    "O": [(0, 0), (0, -1), (-1, 0), (-1, -1)],
 }
-shape_names = ['T', 'J', 'L', 'Z', 'S', 'I', 'O']
+shape_names = ["T", "J", "L", "Z", "S", "I", "O"]
 
 
 def rotated(shape, cclk=False):
@@ -38,17 +38,29 @@ def is_occupied(shape, anchor, board):
 
 def left(shape, anchor, board):
     new_anchor = (anchor[0] - 1, anchor[1])
-    return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
+    return (
+        (shape, anchor)
+        if is_occupied(shape, new_anchor, board)
+        else (shape, new_anchor)
+    )
 
 
 def right(shape, anchor, board):
     new_anchor = (anchor[0] + 1, anchor[1])
-    return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
+    return (
+        (shape, anchor)
+        if is_occupied(shape, new_anchor, board)
+        else (shape, new_anchor)
+    )
 
 
 def soft_drop(shape, anchor, board):
     new_anchor = (anchor[0], anchor[1] + 1)
-    return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
+    return (
+        (shape, anchor)
+        if is_occupied(shape, new_anchor, board)
+        else (shape, new_anchor)
+    )
 
 
 def hard_drop(shape, anchor, board):
@@ -61,12 +73,20 @@ def hard_drop(shape, anchor, board):
 
 def rotate_left(shape, anchor, board):
     new_shape = rotated(shape, cclk=False)
-    return (shape, anchor) if is_occupied(new_shape, anchor, board) else (new_shape, anchor)
+    return (
+        (shape, anchor)
+        if is_occupied(new_shape, anchor, board)
+        else (new_shape, anchor)
+    )
 
 
 def rotate_right(shape, anchor, board):
     new_shape = rotated(shape, cclk=True)
-    return (shape, anchor) if is_occupied(new_shape, anchor, board) else (new_shape, anchor)
+    return (
+        (shape, anchor)
+        if is_occupied(new_shape, anchor, board)
+        else (new_shape, anchor)
+    )
 
 
 def idle(shape, anchor, board):
@@ -99,17 +119,39 @@ def convert_grayscale(board, size):
     arr = np.repeat(arr, block_size, axis=0)
     arr = np.repeat(arr, block_size, axis=1)
 
-    arr = np.insert(arr,
-                    np.repeat([block_size * x for x in range(shape[0] + 1)], [gap_size for _ in range(shape[0] + 1)]),
-                    background_shade, axis=0)
-    arr = np.insert(arr,
-                    np.repeat([block_size * x for x in range(shape[1] + 1)], [gap_size for _ in range(shape[1] + 1)]),
-                    background_shade, axis=1)
+    arr = np.insert(
+        arr,
+        np.repeat(
+            [block_size * x for x in range(shape[0] + 1)],
+            [gap_size for _ in range(shape[0] + 1)],
+        ),
+        background_shade,
+        axis=0,
+    )
+    arr = np.insert(
+        arr,
+        np.repeat(
+            [block_size * x for x in range(shape[1] + 1)],
+            [gap_size for _ in range(shape[1] + 1)],
+        ),
+        background_shade,
+        axis=1,
+    )
 
-    arr = np.insert(arr, np.repeat([0, len(arr)], [padding_width, size - (padding_width + len(arr))]), border_shade,
-                    axis=0)
-    arr = np.insert(arr, np.repeat([0, len(arr[0])], [padding_height, size - (padding_height + len(arr[0]))]),
-                    border_shade, axis=1)
+    arr = np.insert(
+        arr,
+        np.repeat([0, len(arr)], [padding_width, size - (padding_width + len(arr))]),
+        border_shade,
+        axis=0,
+    )
+    arr = np.insert(
+        arr,
+        np.repeat(
+            [0, len(arr[0])], [padding_height, size - (padding_height + len(arr[0]))]
+        ),
+        border_shade,
+        axis=1,
+    )
 
     return arr
 
@@ -123,29 +165,31 @@ def convert_grayscale_rgb(array):
 
 
 class TetrisEngine:
-    def __init__(self,
-                 width,
-                 height,
-                 lock_delay=0,
-                 step_reset=False,
-                 reward_step=False,
-                 penalise_height=False,
-                 penalise_height_increase=False,
-                 advanced_clears=False,
-                 high_scoring=False,
-                 penalise_holes=False,
-                 penalise_holes_increase=False):
+    def __init__(
+        self,
+        width,
+        height,
+        lock_delay=0,
+        step_reset=False,
+        reward_step=False,
+        penalise_height=False,
+        penalise_height_increase=False,
+        advanced_clears=False,
+        high_scoring=False,
+        penalise_holes=False,
+        penalise_holes_increase=False,
+    ):
         self.width = width
         self.height = height
-        self.board = np.zeros(shape=(width, height), dtype=np.float)
+        self.board = np.zeros(shape=(width, height), dtype=np.float32)
         self._scoring = {
-            'reward_step': reward_step,
-            'penalise_height': penalise_height,
-            'penalise_height_increase': penalise_height_increase,
-            'advanced_clears': advanced_clears,
-            'high_scoring': high_scoring,
-            'penalise_holes': penalise_holes,
-            'penalise_holes_increase': penalise_holes_increase
+            "reward_step": reward_step,
+            "penalise_height": penalise_height,
+            "penalise_height_increase": penalise_height_increase,
+            "advanced_clears": advanced_clears,
+            "high_scoring": high_scoring,
+            "penalise_holes": penalise_holes,
+            "penalise_holes_increase": penalise_holes_increase,
         }
 
         # actions are triggered by letters
@@ -216,7 +260,9 @@ class TetrisEngine:
         return sum(can_clear)
 
     def _count_holes(self):
-        self.holes = np.count_nonzero(self.board.cumsum(axis=1) * ~self.board.astype(bool))
+        self.holes = np.count_nonzero(
+            self.board.cumsum(axis=1) * ~self.board.astype(bool)
+        )
         return self.holes
 
     def valid_action_count(self):
@@ -231,18 +277,20 @@ class TetrisEngine:
 
     def get_info(self):
         return {
-            'time': self.time,
-            'current_piece': self.shape_name,
-            'score': self.score,
-            'lines_cleared': self.lines_cleared,
-            'holes': self.holes,
-            'deaths': self.n_deaths,
-            'statistics': self.shape_counts
+            "time": self.time,
+            "current_piece": self.shape_name,
+            "score": self.score,
+            "lines_cleared": self.lines_cleared,
+            "holes": self.holes,
+            "deaths": self.n_deaths,
+            "statistics": self.shape_counts,
         }
 
     def step(self, action):
         self.anchor = (int(self.anchor[0]), int(self.anchor[1]))
-        self.shape, self.anchor = self.value_action_map[action](self.shape, self.anchor, self.board)
+        self.shape, self.anchor = self.value_action_map[action](
+            self.shape, self.anchor, self.board
+        )
         # Drop each step
         self.shape, new_anchor = soft_drop(self.shape, self.anchor, self.board)
         if self._step_reset and (self.anchor != new_anchor):
@@ -253,7 +301,7 @@ class TetrisEngine:
         self.time += 1
         # reward = self.valid_action_count()
         # reward = random.randint(0, 0)
-        reward = 1 if self._scoring.get('reward_step') else 0
+        reward = 1 if self._scoring.get("reward_step") else 0
 
         done = False
         if self._has_dropped():
@@ -263,11 +311,11 @@ class TetrisEngine:
                 self._set_piece(True)
                 cleared_lines = self._clear_lines()
 
-                if self._scoring.get('advanced_clears'):
+                if self._scoring.get("advanced_clears"):
                     scores = [0, 40, 100, 300, 1200]
                     reward += 2.5 * scores[cleared_lines]
                     self.score += scores[cleared_lines]
-                elif self._scoring.get('high_scoring'):
+                elif self._scoring.get("high_scoring"):
                     reward += 1000 * cleared_lines
                     self.score += cleared_lines
                 else:
@@ -283,17 +331,17 @@ class TetrisEngine:
                     old_holes = self.holes
                     self._count_holes()
 
-                    if self._scoring.get('penalise_height'):
+                    if self._scoring.get("penalise_height"):
                         reward -= sum(np.any(self.board, axis=0))
-                    elif self._scoring.get('penalise_height_increase'):
+                    elif self._scoring.get("penalise_height_increase"):
                         new_height = sum(np.any(self.board, axis=0))
                         if new_height > self.piece_height:
                             reward -= 10 * (new_height - self.piece_height)
                         self.piece_height = new_height
 
-                    if self._scoring.get('penalise_holes'):
+                    if self._scoring.get("penalise_holes"):
                         reward -= 5 * self.holes
-                    elif self._scoring.get('penalise_holes_increase'):
+                    elif self._scoring.get("penalise_holes_increase"):
                         reward -= 5 * (self.holes - old_holes)
 
                     self._new_piece()
@@ -328,33 +376,37 @@ class TetrisEngine:
 
     def __repr__(self):
         self._set_piece(True)
-        s = 'o' + '-' * self.width + 'o\n'
-        s += '\n'.join(['|' + ''.join(['X' if j else ' ' for j in i]) + '|' for i in self.board.T])
-        s += '\no' + '-' * self.width + 'o'
+        s = "o" + "-" * self.width + "o\n"
+        s += "\n".join(
+            ["|" + "".join(["X" if j else " " for j in i]) + "|" for i in self.board.T]
+        )
+        s += "\no" + "-" * self.width + "o"
         self._set_piece(False)
         return s
 
 
 class TetrisEnv(gym.Env):
-    metadata = {'render.modes': ['human', 'rgb_array'], "render_fps": 8}
+    metadata = {"render.modes": ["human", "rgb_array"], "render_fps": 8}
 
     # TODO: Add more reward options e.g. wells
     # TODO: Reorganise on next major release
-    def __init__(self,
-                 width=10,
-                 height=20,
-                 obs_type='ram',
-                 extend_dims=False,
-                 render_mode='rgb_array',
-                 reward_step=False,
-                 penalise_height=False,
-                 penalise_height_increase=False,
-                 advanced_clears=False,
-                 high_scoring=False,
-                 penalise_holes=False,
-                 penalise_holes_increase=False,
-                 lock_delay=0,
-                 step_reset=False):
+    def __init__(
+        self,
+        width=10,
+        height=20,
+        obs_type="ram",
+        extend_dims=False,
+        render_mode="rgb_array",
+        reward_step=False,
+        penalise_height=False,
+        penalise_height_increase=False,
+        advanced_clears=False,
+        high_scoring=False,
+        penalise_holes=False,
+        penalise_holes_increase=False,
+        lock_delay=0,
+        step_reset=False,
+    ):
         self.width = width
         self.height = height
         self.obs_type = obs_type
@@ -362,34 +414,46 @@ class TetrisEnv(gym.Env):
         self.render_mode = render_mode
         self.window_size = 512
 
-        self.engine = TetrisEngine(width,
-                                   height,
-                                   lock_delay,
-                                   step_reset,
-                                   reward_step,
-                                   penalise_height,
-                                   penalise_height_increase,
-                                   advanced_clears,
-                                   high_scoring,
-                                   penalise_holes,
-                                   penalise_holes_increase)
+        self.engine = TetrisEngine(
+            width,
+            height,
+            lock_delay,
+            step_reset,
+            reward_step,
+            penalise_height,
+            penalise_height_increase,
+            advanced_clears,
+            high_scoring,
+            penalise_holes,
+            penalise_holes_increase,
+        )
 
         self.action_space = spaces.Discrete(7)
         self.window = None
         self.clock = None
 
-        if obs_type == 'ram':
+        if obs_type == "ram":
             if extend_dims:
-                self.observation_space = spaces.Box(0, 1, shape=(width, height, 1), dtype=np.float32)
+                self.observation_space = spaces.Box(
+                    0, 1, shape=(width, height, 1), dtype=np.float32
+                )
             else:
-                self.observation_space = spaces.Box(0, 1, shape=(width, height), dtype=np.float32)
-        elif obs_type == 'grayscale':
+                self.observation_space = spaces.Box(
+                    0, 1, shape=(width, height), dtype=np.float32
+                )
+        elif obs_type == "grayscale":
             if extend_dims:
-                self.observation_space = spaces.Box(0, 1, shape=(84, 84, 1), dtype=np.float32)
+                self.observation_space = spaces.Box(
+                    0, 1, shape=(84, 84, 1), dtype=np.float32
+                )
             else:
-                self.observation_space = spaces.Box(0, 1, shape=(84, 84), dtype=np.float32)
-        elif obs_type == 'rgb':
-            self.observation_space = spaces.Box(0, 1, shape=(84, 84, 3), dtype=np.float32)
+                self.observation_space = spaces.Box(
+                    0, 1, shape=(84, 84), dtype=np.float32
+                )
+        elif obs_type == "rgb":
+            self.observation_space = spaces.Box(
+                0, 1, shape=(84, 84, 3), dtype=np.float32
+            )
 
     def _get_info(self):
         return self.engine.get_info()
@@ -418,26 +482,32 @@ class TetrisEnv(gym.Env):
 
         new_mode = self.obs_type if mode is None else mode
 
-        if new_mode == 'ram':
+        if new_mode == "ram":
             extend = self.extend_dims if extend_dims is None else extend_dims
 
-            return np.reshape(obs, newshape=(self.width, self.height, 1)) if extend else obs
+            return (
+                np.reshape(obs, newshape=(self.width, self.height, 1))
+                if extend
+                else obs
+            )
         else:
             obs = convert_grayscale(obs, 84)
 
-            if new_mode == 'grayscale':
+            if new_mode == "grayscale":
                 extend = self.extend_dims if extend_dims is None else extend_dims
 
                 return np.reshape(obs, newshape=(84, 84, 1)) if extend else obs
             else:
                 return convert_grayscale_rgb(obs)
 
-    def render(self, mode='human'):
-        if mode == 'human':
+    def render(self, mode="human"):
+        if mode == "human":
             if self.window is None:
                 pygame.init()
                 pygame.display.init()
-                self.window = pygame.display.set_mode((self.window_size, self.window_size))
+                self.window = pygame.display.set_mode(
+                    (self.window_size, self.window_size)
+                )
             if self.clock is None:
                 self.clock = pygame.time.Clock()
 
@@ -455,7 +525,7 @@ class TetrisEnv(gym.Env):
             pygame.display.update()
 
             self.clock.tick(self.metadata["render_fps"])
-        elif mode == 'rgb_array':
+        elif mode == "rgb_array":
             obs = self.engine.render()
             obs = convert_grayscale(obs, 160)
             obs = convert_grayscale_rgb(obs)
