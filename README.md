@@ -42,6 +42,52 @@ while episode < 10:
 env.close()
 ```
 
+```python
+# main.py
+import gymnasium as gym
+import gym_simpletetris
+from gym_simpletetris.tetris.human_input_handler import HumanInputHandler
+
+
+def main():
+    env = gym.make("SimpleTetris-v0", render_mode="human")
+    observation, info = env.reset()
+    input_mode = "human"
+
+    if input_mode == "human":
+        input_handler = HumanInputHandler(env.action_space, record_actions=True)
+    else:
+        pass
+        # Replace 'YourAIAgent' with your actual AI agent class
+        # from your_ai_agent import YourAIAgent
+
+        # agent = YourAIAgent()
+        # input_handler = AIInputHandler(agent)
+
+    done = False
+    while not done:
+        env.render()
+        action = input_handler.get_action(observation)
+        if action == "quit":
+            break
+        observation, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+
+    env.close()
+    input_handler.close()
+
+    # If human input was recorded, save it
+    if isinstance(input_handler, HumanInputHandler) and input_handler.record_actions:
+        with open("training_data.pkl", "wb") as f:
+            import pickle
+
+            pickle.dump(input_handler.actions, f)
+
+
+if __name__ == "__main__":
+    main()
+```
+
 ### 3. Updated Environment Options
 
 The following new options have been added to the environment:
