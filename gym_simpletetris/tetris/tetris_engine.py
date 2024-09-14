@@ -119,16 +119,19 @@ class TetrisEngine:
         )
 
         self.value_action_map = {
-            0: left,
-            1: right,
-            2: hard_drop,
-            3: soft_drop,
-            4: rotate_left,
-            5: rotate_right,
-            6: idle,
+            0: left,  # Move Left
+            1: right,  # Move Right
+            2: hard_drop,  # Hard Drop
+            3: soft_drop,  # Soft Drop
+            4: rotate_left,  # Rotate Left
+            5: rotate_right,  # Rotate Right
+            6: self.hold_swap,  # Hold/Swap
+            7: idle,  # Idle action
         }
         self.action_value_map = dict([(j, i) for i, j in self.value_action_map.items()])
         self.nb_actions = len(self.value_action_map)
+
+        self.held_piece = None  # No piece is held at the start
 
         self.time = -1
         self.score = -1
@@ -155,6 +158,17 @@ class TetrisEngine:
             r -= n
             if r <= 0:
                 return shape_names[i]
+
+    def hold_swap(self, shape, anchor, board):
+        if self.held_piece is None:
+            # If no piece is currently held, hold the current piece
+            self.held_piece = shape
+            self._new_piece()  # Generate a new piece to replace the held one
+        else:
+            # Swap the current piece with the held piece
+            shape, self.held_piece = self.held_piece, shape
+
+        return shape, anchor
 
     def _new_piece(self):
         self.anchor = (self.width / 2, 0)
@@ -218,6 +232,7 @@ class TetrisEngine:
         reward = self.scoring_system.calculate_step_reward()
 
         done = False
+        cleared_lines = 0  # Track cleared lines
         if self._has_dropped():
             self._lock_delay = self._lock_delay_fn(self._lock_delay)
 
@@ -254,7 +269,7 @@ class TetrisEngine:
         self._set_piece(True)
         state = np.copy(self.board)
         self._set_piece(False)
-        return state, reward, done
+        return state, reward, done, cleared_lines  # Return cleared lines information
 
     def clear(self):
         self.time = 0

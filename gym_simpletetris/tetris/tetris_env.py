@@ -72,9 +72,11 @@ class TetrisEnv(gym.Env):
         return self.engine.get_info()
 
     def step(self, action):
-        state, reward, done = self.engine.step(action)
+        state, reward, done, cleared_lines = self.engine.step(action)
+
         observation = self._get_observation(state)
         info = self._get_info()
+        info["cleared_lines"] = cleared_lines  # Include cleared lines info
         return observation, reward, done, done, info
 
     def reset(self, seed=None, options=None):
