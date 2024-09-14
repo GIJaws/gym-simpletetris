@@ -1,5 +1,5 @@
-import numpy as np
 import random
+import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 import pygame
@@ -386,7 +386,7 @@ class TetrisEngine:
 
 
 class TetrisEnv(gym.Env):
-    metadata = {"render.modes": ["human", "rgb_array"], "render_fps": 8}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 8}
 
     # TODO: Add more reward options e.g. wells
     # TODO: Reorganise on next major release
@@ -534,6 +534,7 @@ class TetrisEnv(gym.Env):
         pygame.event.pump()
         pygame.display.update()
         self.clock.tick(self.metadata["render_fps"])
+        return obs if self.render_mode == "rgb_array" else None
 
     def close(self):
         if self.window is not None:
