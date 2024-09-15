@@ -119,14 +119,20 @@ class TetrisEngine:
         )
 
         self.value_action_map = {
-            0: left,  # Move Left
-            1: right,  # Move Right
-            2: hard_drop,  # Hard Drop
-            3: soft_drop,  # Soft Drop
-            4: rotate_left,  # Rotate Left
-            5: rotate_right,  # Rotate Right
-            6: self.hold_swap,  # Hold/Swap
-            7: idle,  # Idle action
+            0: left,
+            1: right,
+            2: hard_drop,
+            3: soft_drop,
+            4: rotate_left,
+            5: rotate_right,
+            6: self.hold_swap,
+            7: idle,
+            8: lambda shape, anchor, board: rotate_left(
+                *left(shape, anchor, board), board
+            ),
+            9: lambda shape, anchor, board: rotate_right(
+                *right(shape, anchor, board), board
+            ),
         }
         self.action_value_map = dict([(j, i) for i, j in self.value_action_map.items()])
         self.nb_actions = len(self.value_action_map)

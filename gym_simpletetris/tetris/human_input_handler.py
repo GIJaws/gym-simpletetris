@@ -1,5 +1,5 @@
-import pygame
 from .input_handler import InputHandler
+import pygame
 
 
 class HumanInputHandler(InputHandler):
@@ -10,41 +10,45 @@ class HumanInputHandler(InputHandler):
         pygame.init()
         pygame.display.set_caption("Human Tetris")
 
-        # Updated key action map based on your requirements
+        # Updated key action map
         self.key_action_map = {
-            pygame.K_a: 0,  # Move Left (A)
-            pygame.K_d: 1,  # Move Right (D)
-            pygame.K_s: 3,  # Soft Drop (S)
-            pygame.K_w: 2,  # Hard Drop (W)
-            pygame.K_LEFT: 4,  # Rotate Left (Arrow Left)
-            pygame.K_RIGHT: 5,  # Rotate Right (Arrow Right)
-            pygame.K_LSHIFT: 6,  # Hold/Swap (Shift)
+            pygame.K_a: 0,  # Move Left
+            pygame.K_d: 1,  # Move Right
+            pygame.K_s: 3,  # Soft Drop
+            pygame.K_w: 2,  # Hard Drop
+            pygame.K_LEFT: 4,  # Rotate Left
+            pygame.K_RIGHT: 5,  # Rotate Right
+            pygame.K_LSHIFT: 6,  # Hold/Swap
             pygame.K_ESCAPE: "quit",
         }
 
     def get_action(self, observation):
-        action = 7  # Default action is 'idle' (assuming 7 is idle)
+        action = 7  # Default action is 'idle'
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
 
-        keys = pygame.key.get_pressed()  # Detect which keys are held down
+        keys = pygame.key.get_pressed()
 
-        # Handle movement based on held-down keys for WASD and Arrow keys
-        if keys[pygame.K_a]:  # Move Left (A)
+        # Priority order: movement, rotation, other actions
+        if keys[pygame.K_a]:
             action = self.key_action_map[pygame.K_a]
-        elif keys[pygame.K_d]:  # Move Right (D)
+        elif keys[pygame.K_d]:
             action = self.key_action_map[pygame.K_d]
-        elif keys[pygame.K_s]:  # Soft Drop (S)
-            action = self.key_action_map[pygame.K_s]
-        elif keys[pygame.K_w]:  # Hard Drop (W)
+
+        # Allow rotation while moving
+        if keys[pygame.K_LEFT]:
+            action = 8 if action in [0, 1] else 4  # 8: Move+RotateLeft, 4: RotateLeft
+        elif keys[pygame.K_RIGHT]:
+            action = 9 if action in [0, 1] else 5  # 9: Move+RotateRight, 5: RotateRight
+
+        # Other actions
+        if keys[pygame.K_w]:
             action = self.key_action_map[pygame.K_w]
-        elif keys[pygame.K_LEFT]:  # Rotate Left (Arrow Left)
-            action = self.key_action_map[pygame.K_LEFT]
-        elif keys[pygame.K_RIGHT]:  # Rotate Right (Arrow Right)
-            action = self.key_action_map[pygame.K_RIGHT]
-        elif keys[pygame.K_LSHIFT]:  # Hold/Swap (Shift)
+        elif keys[pygame.K_s]:
+            action = self.key_action_map[pygame.K_s]
+        elif keys[pygame.K_LSHIFT]:
             action = self.key_action_map[pygame.K_LSHIFT]
         elif keys[pygame.K_ESCAPE]:
             return "quit"
