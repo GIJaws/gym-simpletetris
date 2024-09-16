@@ -25,6 +25,7 @@ class TetrisEnv(gym.Env):
         penalise_holes_increase=False,
         lock_delay=0,
         step_reset=False,
+        initial_level=1,
     ):
         self.width = width
         self.height = height
@@ -45,6 +46,7 @@ class TetrisEnv(gym.Env):
             high_scoring,
             penalise_holes,
             penalise_holes_increase,
+            initial_level,
         )
 
         self.action_space = spaces.Discrete(7)

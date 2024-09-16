@@ -104,6 +104,7 @@ class TetrisEngine:
         high_scoring=False,
         penalise_holes=False,
         penalise_holes_increase=False,
+        initial_level=1,
     ):
         self.width = width
         self.height = height
@@ -140,8 +141,13 @@ class TetrisEngine:
         self.held_piece = None  # No piece is held at the start
         self.next_piece = None
 
-        self.level = 1
-        self.lines_for_next_level = 10  # Number of lines to clear for next level
+        self.initial_level = initial_level
+        self.level = initial_level
+        self.lines_for_next_level = (
+            self.level * 10
+        )  # Number of lines to clear for next level
+        self.gravity_interval = self._calculate_gravity_interval()
+        self.gravity_timer = 0
 
         self.time = -1
         self.score = -1
@@ -205,6 +211,9 @@ class TetrisEngine:
         if self.lines_cleared >= self.lines_for_next_level:
             self.level += 1
             self.lines_for_next_level += 10  # Increase lines needed for next level
+            self.gravity_interval = (
+                self._calculate_gravity_interval()
+            )  # Recalculate speed
 
         return cleared_lines
 
@@ -233,60 +242,78 @@ class TetrisEngine:
             "deaths": self.n_deaths,
             "statistics": self.shape_counts,
             "level": self.level,
+            "gravity_interval": self.gravity_interval,
         }
+
+    def _calculate_gravity_interval(self):
+        # Adjust this formula to change how speed increases with level
+        return max(
+            1, int(30 * (0.8 - ((self.level - 1) * 0.007)) ** ((self.level - 1)))
+        )
 
     def step(self, action):
         self.anchor = (int(self.anchor[0]), int(self.anchor[1]))
         self.shape, self.anchor = self.value_action_map[action](
             self.shape, self.anchor, self.board
         )
-        self.shape, new_anchor = soft_drop(self.shape, self.anchor, self.board)
-        if self._step_reset and (self.anchor != new_anchor):
-            self._lock_delay = 0
-        self.anchor = new_anchor
 
         self.time += 1
+        self.gravity_timer += 1
         reward = self.scoring_system.calculate_step_reward()
 
         done = False
-        cleared_lines = 0  # Track cleared lines
-        if self._has_dropped():
-            self._lock_delay = self._lock_delay_fn(self._lock_delay)
+        cleared_lines = 0
 
-            if self._lock_delay == 0:
-                self._set_piece(True)
-                cleared_lines = self._clear_lines()
+        if self.gravity_timer >= self.gravity_interval:
+            self.gravity_timer = 0
+            self.shape, new_anchor = soft_drop(self.shape, self.anchor, self.board)
+            if self._step_reset and (self.anchor != new_anchor):
+                self._lock_delay = 0
+            self.anchor = new_anchor
 
-                reward += self.scoring_system.calculate_clear_reward(cleared_lines)
-                self.score += self.scoring_system.calculate_clear_reward(cleared_lines)
+            if self._has_dropped():
+                self._lock_delay = self._lock_delay_fn(self._lock_delay)
 
-                if np.any(self.board[:, 0]):
-                    self._count_holes()
-                    self.n_deaths += 1
-                    done = True
-                    reward = -100
-                else:
-                    old_holes = self.holes
-                    old_height = self.piece_height
-                    self._count_holes()
-                    new_height = sum(np.any(self.board, axis=0))
+                if self._lock_delay == 0:
+                    self._set_piece(True)
+                    cleared_lines = self._clear_lines()
 
-                    reward += self.scoring_system.calculate_height_penalty(self.board)
-                    reward += self.scoring_system.calculate_height_increase_penalty(
-                        new_height, old_height
-                    )
-                    reward += self.scoring_system.calculate_holes_penalty(self.holes)
-                    reward += self.scoring_system.calculate_holes_increase_penalty(
-                        self.holes, old_holes
+                    reward += self.scoring_system.calculate_clear_reward(cleared_lines)
+                    self.score += self.scoring_system.calculate_clear_reward(
+                        cleared_lines
                     )
 
-                    self.piece_height = new_height
-                    self._new_piece()
+                    if np.any(self.board[:, 0]):
+                        self._count_holes()
+                        self.n_deaths += 1
+                        done = True
+                        reward = -100
+                    else:
+                        old_holes = self.holes
+                        old_height = self.piece_height
+                        self._count_holes()
+                        new_height = sum(np.any(self.board, axis=0))
+
+                        reward += self.scoring_system.calculate_height_penalty(
+                            self.board
+                        )
+                        reward += self.scoring_system.calculate_height_increase_penalty(
+                            new_height, old_height
+                        )
+                        reward += self.scoring_system.calculate_holes_penalty(
+                            self.holes
+                        )
+                        reward += self.scoring_system.calculate_holes_increase_penalty(
+                            self.holes, old_holes
+                        )
+
+                        self.piece_height = new_height
+                        self._new_piece()
 
         self._set_piece(True)
         state = np.copy(self.board)
         self._set_piece(False)
-        return state, reward, done, cleared_lines  # Return cleared lines information
+        return state, reward, done, cleared_lines
 
     def clear(self):
         self.time = 0
@@ -296,6 +323,11 @@ class TetrisEngine:
         self.piece_height = 0
         self._new_piece()
         self.board = np.zeros_like(self.board)
+
+        self.level = self.initial_level
+        self.lines_for_next_level = 10
+        self.gravity_interval = self._calculate_gravity_interval()
+        self.gravity_timer = 0
 
         return self.board
 
