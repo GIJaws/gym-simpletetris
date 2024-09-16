@@ -54,17 +54,9 @@ class TetrisEnv(gym.Env):
 
     def _get_observation_space(self):
         if self.obs_type == "ram":
-            shape = (
-                (self.width, self.height, 1)
-                if self.extend_dims
-                else (self.width, self.height)
-            )
+            shape = (self.width, self.height, 1) if self.extend_dims else (self.width, self.height)
         elif self.obs_type in ["grayscale", "rgb"]:
-            shape = (
-                (84, 84, 1)
-                if self.obs_type == "grayscale" and self.extend_dims
-                else (84, 84, 3)
-            )
+            shape = (84, 84, 1) if self.obs_type == "grayscale" and self.extend_dims else (84, 84, 3)
         else:
             raise ValueError(f"Unsupported observation type: {self.obs_type}")
 

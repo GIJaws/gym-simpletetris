@@ -59,9 +59,7 @@ def play_tetris(render_mode="human", record_actions=False):
             if cleared_lines > 0:
                 paused = True
                 pause_end_time = current_time + pause_duration
-                print(
-                    f"Paused for {pause_duration} seconds after clearing {cleared_lines} lines."
-                )
+                print(f"Paused for {pause_duration} seconds after clearing {cleared_lines} lines.")
 
             last_logic_time = current_time
 

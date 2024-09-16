@@ -35,29 +35,17 @@ def is_occupied(shape, anchor, board):
 
 def left(shape, anchor, board):
     new_anchor = (anchor[0] - 1, anchor[1])
-    return (
-        (shape, anchor)
-        if is_occupied(shape, new_anchor, board)
-        else (shape, new_anchor)
-    )
+    return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
 
 
 def right(shape, anchor, board):
     new_anchor = (anchor[0] + 1, anchor[1])
-    return (
-        (shape, anchor)
-        if is_occupied(shape, new_anchor, board)
-        else (shape, new_anchor)
-    )
+    return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
 
 
 def soft_drop(shape, anchor, board):
     new_anchor = (anchor[0], anchor[1] + 1)
-    return (
-        (shape, anchor)
-        if is_occupied(shape, new_anchor, board)
-        else (shape, new_anchor)
-    )
+    return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
 
 
 def hard_drop(shape, anchor, board):
@@ -70,20 +58,12 @@ def hard_drop(shape, anchor, board):
 
 def rotate_left(shape, anchor, board):
     new_shape = rotated(shape, cclk=False)
-    return (
-        (shape, anchor)
-        if is_occupied(new_shape, anchor, board)
-        else (new_shape, anchor)
-    )
+    return (shape, anchor) if is_occupied(new_shape, anchor, board) else (new_shape, anchor)
 
 
 def rotate_right(shape, anchor, board):
     new_shape = rotated(shape, cclk=True)
-    return (
-        (shape, anchor)
-        if is_occupied(new_shape, anchor, board)
-        else (new_shape, anchor)
-    )
+    return (shape, anchor) if is_occupied(new_shape, anchor, board) else (new_shape, anchor)
 
 
 def idle(shape, anchor, board):
@@ -128,12 +108,8 @@ class TetrisEngine:
             5: rotate_right,
             6: self.hold_swap,
             7: idle,
-            8: lambda shape, anchor, board: rotate_left(
-                *left(shape, anchor, board), board
-            ),
-            9: lambda shape, anchor, board: rotate_right(
-                *right(shape, anchor, board), board
-            ),
+            8: lambda shape, anchor, board: rotate_left(*left(shape, anchor, board), board),
+            9: lambda shape, anchor, board: rotate_right(*right(shape, anchor, board), board),
         }
         self.action_value_map = dict([(j, i) for i, j in self.value_action_map.items()])
         self.nb_actions = len(self.value_action_map)
@@ -143,11 +119,10 @@ class TetrisEngine:
 
         self.initial_level = initial_level
         self.level = initial_level
-        self.lines_for_next_level = (
-            self.level * 10
-        )  # Number of lines to clear for next level
+        self.lines_for_next_level = self.level * 10  # Number of lines to clear for next level
         self.gravity_interval = self._calculate_gravity_interval()
         self.gravity_timer = 0
+        self.gravity_counter = 0
 
         self.time = -1
         self.score = -1
@@ -211,16 +186,12 @@ class TetrisEngine:
         if self.lines_cleared >= self.lines_for_next_level:
             self.level += 1
             self.lines_for_next_level += 10  # Increase lines needed for next level
-            self.gravity_interval = (
-                self._calculate_gravity_interval()
-            )  # Recalculate speed
+            self.gravity_interval = self._calculate_gravity_interval()  # Recalculate speed
 
         return cleared_lines
 
     def _count_holes(self):
-        self.holes = np.count_nonzero(
-            self.board.cumsum(axis=1) * ~self.board.astype(bool)
-        )
+        self.holes = np.count_nonzero(self.board.cumsum(axis=1) * ~self.board.astype(bool))
         return self.holes
 
     def valid_action_count(self):
@@ -246,16 +217,22 @@ class TetrisEngine:
         }
 
     def _calculate_gravity_interval(self):
-        # Adjust this formula to change how speed increases with level
+        # Level 0: gravity is effectively disabled, requiring player input for dropping
+        if self.level == 0:
+            return float("inf")  # Gravity won't trigger automatically
+
+        # Other levels: use the regular gravity decay formula
         return max(
-            1, int(30 * (0.8 - ((self.level - 1) * 0.007)) ** ((self.level - 1)))
+            1,
+            min(
+                60 * (0.8 - ((min(self.level + 9, 29) - 1) * 0.007)) ** min(self.level + 9, 29),
+                60,
+            ),
         )
 
     def step(self, action):
         self.anchor = (int(self.anchor[0]), int(self.anchor[1]))
-        self.shape, self.anchor = self.value_action_map[action](
-            self.shape, self.anchor, self.board
-        )
+        self.shape, self.anchor = self.value_action_map[action](self.shape, self.anchor, self.board)
 
         self.time += 1
         self.gravity_timer += 1
@@ -264,7 +241,7 @@ class TetrisEngine:
         done = False
         cleared_lines = 0
 
-        if self.gravity_timer >= self.gravity_interval:
+        if self.gravity_timer >= self.gravity_interval and self.gravity_interval != float("inf"):
             self.gravity_timer = 0
             self.shape, new_anchor = soft_drop(self.shape, self.anchor, self.board)
             if self._step_reset and (self.anchor != new_anchor):
@@ -279,9 +256,7 @@ class TetrisEngine:
                     cleared_lines = self._clear_lines()
 
                     reward += self.scoring_system.calculate_clear_reward(cleared_lines)
-                    self.score += self.scoring_system.calculate_clear_reward(
-                        cleared_lines
-                    )
+                    self.score += self.scoring_system.calculate_clear_reward(cleared_lines)
 
                     if np.any(self.board[:, 0]):
                         self._count_holes()
@@ -294,18 +269,10 @@ class TetrisEngine:
                         self._count_holes()
                         new_height = sum(np.any(self.board, axis=0))
 
-                        reward += self.scoring_system.calculate_height_penalty(
-                            self.board
-                        )
-                        reward += self.scoring_system.calculate_height_increase_penalty(
-                            new_height, old_height
-                        )
-                        reward += self.scoring_system.calculate_holes_penalty(
-                            self.holes
-                        )
-                        reward += self.scoring_system.calculate_holes_increase_penalty(
-                            self.holes, old_holes
-                        )
+                        reward += self.scoring_system.calculate_height_penalty(self.board)
+                        reward += self.scoring_system.calculate_height_increase_penalty(new_height, old_height)
+                        reward += self.scoring_system.calculate_holes_penalty(self.holes)
+                        reward += self.scoring_system.calculate_holes_increase_penalty(self.holes, old_holes)
 
                         self.piece_height = new_height
                         self._new_piece()
@@ -346,9 +313,7 @@ class TetrisEngine:
     def __repr__(self):
         self._set_piece(True)
         s = "o" + "-" * self.width + "o\n"
-        s += "\n".join(
-            ["|" + "".join(["X" if j else " " for j in i]) + "|" for i in self.board.T]
-        )
+        s += "\n".join(["|" + "".join(["X" if j else " " for j in i]) + "|" for i in self.board.T])
         s += "\no" + "-" * self.width + "o"
         self._set_piece(False)
         return s

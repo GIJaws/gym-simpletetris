@@ -54,30 +54,20 @@ class Renderer:
                 )
 
     def _render_ui(self, game_state):
-        score_text = self.font.render(
-            f"Score: {game_state['score']}", True, (255, 255, 255)
-        )
+        score_text = self.font.render(f"Score: {game_state['score']}", True, (255, 255, 255))
         self.window.blit(score_text, (10, 10))
 
-        lines_text = self.font.render(
-            f"Lines: {game_state['lines_cleared']}", True, (255, 255, 255)
-        )
+        lines_text = self.font.render(f"Lines: {game_state['lines_cleared']}", True, (255, 255, 255))
         self.window.blit(lines_text, (10, 40))
 
-        level_text = self.font.render(
-            f"Level: {game_state['level']}", True, (255, 255, 255)
-        )
+        level_text = self.font.render(f"Level: {game_state['level']}", True, (255, 255, 255))
         self.window.blit(level_text, (10, 70))
 
         # Render held piece
-        self._render_piece(
-            game_state["held_piece"], (self.window_size - 100, 10), (100, 100)
-        )
+        self._render_piece(game_state["held_piece"], (self.window_size - 100, 10), (100, 100))
 
         # Render next piece
-        self._render_piece(
-            game_state["next_piece"], (self.window_size - 100, 120), (100, 100)
-        )
+        self._render_piece(game_state["next_piece"], (self.window_size - 100, 120), (100, 100))
 
     def _render_piece(self, piece, pos, size):
         if piece:
@@ -141,9 +131,7 @@ class Renderer:
 
         arr = np.insert(
             arr,
-            np.repeat(
-                [0, len(arr)], [padding_width, size - (padding_width + len(arr))]
-            ),
+            np.repeat([0, len(arr)], [padding_width, size - (padding_width + len(arr))]),
             border_shade,
             axis=0,
         )
