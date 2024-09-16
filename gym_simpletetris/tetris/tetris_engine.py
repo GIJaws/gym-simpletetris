@@ -70,6 +70,13 @@ def idle(shape, anchor, board):
     return (shape, anchor)
 
 
+def process_combined_actions(actions, shape, anchor, board):
+    # Process each action in the combined action
+    for action in actions:
+        shape, anchor = action(shape, anchor, board)
+    return shape, anchor
+
+
 class TetrisEngine:
     def __init__(
         self,
@@ -100,17 +107,33 @@ class TetrisEngine:
         )
 
         self.value_action_map = {
-            0: left,
-            1: right,
-            2: hard_drop,
-            3: soft_drop,
-            4: rotate_left,
-            5: rotate_right,
-            6: self.hold_swap,
-            7: idle,
-            8: lambda shape, anchor, board: rotate_left(*left(shape, anchor, board), board),
-            9: lambda shape, anchor, board: rotate_right(*right(shape, anchor, board), board),
+            0: left,  # Move Left
+            1: right,  # Move Right
+            2: hard_drop,  # Hard Drop
+            3: soft_drop,  # Soft Drop
+            4: rotate_left,  # Rotate Left
+            5: rotate_right,  # Rotate Right
+            6: self.hold_swap,  # Hold/Swap
+            7: idle,  # Idle
+            # Combined actions
+            8: lambda s, a, b: process_combined_actions([left, rotate_left], s, a, b),  # Left + Rotate Left
+            9: lambda s, a, b: process_combined_actions([left, rotate_right], s, a, b),  # Left + Rotate Right
+            10: lambda s, a, b: process_combined_actions([right, rotate_left], s, a, b),  # Right + Rotate Left
+            11: lambda s, a, b: process_combined_actions([right, rotate_right], s, a, b),  # Right + Rotate Right
+            12: lambda s, a, b: process_combined_actions([left, hard_drop], s, a, b),  # Left + Hard Drop
+            13: lambda s, a, b: process_combined_actions([left, soft_drop], s, a, b),  # Left + Soft Drop
+            14: lambda s, a, b: process_combined_actions([left, self.hold_swap], s, a, b),  # Left + Hold/Swap
+            15: lambda s, a, b: process_combined_actions([right, hard_drop], s, a, b),  # Right + Hard Drop
+            16: lambda s, a, b: process_combined_actions([right, soft_drop], s, a, b),  # Right + Soft Drop
+            17: lambda s, a, b: process_combined_actions([right, self.hold_swap], s, a, b),  # Right + Hold/Swap
+            18: lambda s, a, b: process_combined_actions([rotate_left, hard_drop], s, a, b),  # Rotate Left + Hard Drop
+            19: lambda s, a, b: process_combined_actions([rotate_left, soft_drop], s, a, b),  # Rotate Left + Soft Drop
+            20: lambda s, a, b: process_combined_actions([rotate_left, self.hold_swap], s, a, b),
+            21: lambda s, a, b: process_combined_actions([rotate_right, hard_drop], s, a, b),
+            22: lambda s, a, b: process_combined_actions([rotate_right, soft_drop], s, a, b),
+            23: lambda s, a, b: process_combined_actions([rotate_right, self.hold_swap], s, a, b),
         }
+
         self.action_value_map = dict([(j, i) for i, j in self.value_action_map.items()])
         self.nb_actions = len(self.value_action_map)
 
@@ -232,7 +255,11 @@ class TetrisEngine:
 
     def step(self, action):
         self.anchor = (int(self.anchor[0]), int(self.anchor[1]))
-        self.shape, self.anchor = self.value_action_map[action](self.shape, self.anchor, self.board)
+        if action in self.value_action_map:
+            # Process either a single or combined action
+            self.shape, self.anchor = self.value_action_map[action](self.shape, self.anchor, self.board)
+        else:
+            raise KeyError(f"Action {action} is not mapped.")
 
         self.time += 1
         self.gravity_timer += 1
