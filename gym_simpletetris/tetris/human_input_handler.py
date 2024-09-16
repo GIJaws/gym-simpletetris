@@ -3,9 +3,6 @@ from .input_handler import InputHandler
 import pygame
 import logging
 
-# Initialize logging
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
-
 
 class HumanInputHandler(InputHandler):
     def __init__(self, action_space, record_actions=False):
@@ -28,17 +25,8 @@ class HumanInputHandler(InputHandler):
     def get_action(self, observation):
         keys = pygame.key.get_pressed()
 
-        # Only log if any relevant keys are pressed
-        # relevant_keys_pressed = any(keys[key] for key in self.key_action_map)
-
-        # if relevant_keys_pressed:
-        #     logging.info(f"Keys pressed: {[pygame.key.name(key) for key in self.key_action_map if keys[key]]}")
-
         actions = [action for key, action in self.key_action_map.items() if keys[key]] or [7]
-        # logging.info(f"Current action set: {actions}")
-
         if "quit" in actions:
-            # logging.info("Quit action detected")
             return "quit"
 
         if self.record_actions:

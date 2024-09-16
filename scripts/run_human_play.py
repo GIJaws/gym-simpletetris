@@ -8,4 +8,4 @@ sys.path.insert(0, project_root)
 from gym_simpletetris.human_play import play_tetris
 
 if __name__ == "__main__":
-    play_tetris(render_mode="human", record_actions=False, logic_updates_per_second=60)
+    play_tetris(render_mode="human", record_actions=False)

@@ -204,6 +204,8 @@ class TetrisEngine:
             "statistics": self.shape_counts,
             "level": self.level,
             "gravity_interval": self.gravity_interval,
+            "next_piece": self.next_piece,
+            "held_piece": self.held_piece,
         }
 
     def _calculate_gravity_interval(self):
@@ -284,7 +286,7 @@ class TetrisEngine:
         self._set_piece(True)
         state = np.copy(self.board)
         self._set_piece(False)
-        return state, reward, done, cleared_lines
+        return state, reward, done
 
     def clear(self):
         self.time = 0

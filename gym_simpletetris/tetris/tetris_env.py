@@ -27,13 +27,10 @@ class TetrisEnv(gym.Env):
         step_reset=False,
         initial_level=1,
     ):
-        self.width = width
-        self.height = height
         self.obs_type = obs_type
         self.extend_dims = extend_dims
-        self.render_mode = render_mode
 
-        self.renderer = Renderer(width, height, window_size)
+        self.renderer = Renderer(width, height, render_mode, self.metadata["render_fps"], window_size=window_size)
         self.engine = TetrisEngine(
             width,
             height,
@@ -54,7 +51,11 @@ class TetrisEnv(gym.Env):
 
     def _get_observation_space(self):
         if self.obs_type == "ram":
-            shape = (self.width, self.height, 1) if self.extend_dims else (self.width, self.height)
+            shape = (
+                (self.renderer.width, self.renderer.height, 1)
+                if self.extend_dims
+                else (self.renderer.width, self.renderer.height)
+            )
         elif self.obs_type in ["grayscale", "rgb"]:
             shape = (84, 84, 1) if self.obs_type == "grayscale" and self.extend_dims else (84, 84, 3)
         else:
@@ -62,26 +63,14 @@ class TetrisEnv(gym.Env):
 
         return spaces.Box(0, 1, shape=shape, dtype=np.float32)
 
-    def _get_info(self):
-        info = self.engine.get_info()
-        info["next_piece"] = self.engine.next_piece
-        info["held_piece"] = self.engine.held_piece
-        return info
-
     def step(self, action):
-        state, reward, done, cleared_lines = self.engine.step(action)
-
-        observation = self._get_observation(state)
-        info = self._get_info()
-        info["cleared_lines"] = cleared_lines  # Include cleared lines info
-        return observation, reward, done, done, info
+        state, reward, done = self.engine.step(action)
+        return self._get_observation(state), reward, done, done, self.engine.get_info()
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         state = self.engine.clear()
-        observation = self._get_observation(state)
-        info = self._get_info()
-        return observation, info
+        return self._get_observation(state), self.engine.get_info()
 
     def _get_observation(self, state):
         if self.obs_type == "ram":
@@ -95,13 +84,7 @@ class TetrisEnv(gym.Env):
         return obs.astype(np.float32)
 
     def render(self):
-        if self.render_mode == "rgb_array":
-            return self.renderer.render_rgb_array(self.engine.render())
-        elif self.render_mode == "human":
-            game_state = self._get_info()
-            return self.renderer.render_human(self.engine.render(), game_state)
-        else:
-            raise ValueError(f"Unsupported render mode: {self.render_mode}")
+        return self.renderer.render(self.engine.render(), self.engine.get_info())
 
     def close(self):
         self.renderer.close()

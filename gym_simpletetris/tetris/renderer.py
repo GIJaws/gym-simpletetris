@@ -3,54 +3,69 @@ import numpy as np
 
 
 class Renderer:
-    def __init__(self, width, height, window_size=512):
+    def __init__(self, width, height, render_mode, render_fps, window_size=512):
         self.width = width
         self.height = height
+        self.render_mode = render_mode
+        self.render_fps = render_fps
         self.window_size = window_size
         self.window = None
         self.clock = None
         self.font = None
+
+        # Initialize Pygame here
+        if self.render_mode == "human":
+            pygame.init()
+            pygame.display.init()
+            self.window = pygame.display.set_mode((self.window_size, self.window_size))
+            self.clock = pygame.time.Clock()
+            self.font = pygame.font.Font(None, 24)
+
+    def render(self, board, gamestate):
+        if self.render_mode == "rgb_array":
+            return self.render_rgb_array(board)
+        elif self.render_mode == "human":
+            return self.render_human(board, gamestate)
 
     def render_rgb_array(self, board):
         obs = self._convert_grayscale(board, 160)
         return self._convert_grayscale_rgb(obs)
 
     def render_human(self, board, game_state):
-        if self.window is None:
-            pygame.init()
-            pygame.display.init()
-            self.window = pygame.display.set_mode((self.window_size, self.window_size))
-        if self.clock is None:
-            self.clock = pygame.time.Clock()
-        if self.font is None:
-            self.font = pygame.font.Font(None, 24)
-
-        self.window.fill((0, 0, 0))  # Clear screen
+        canvas = pygame.Surface((self.window_size, self.window_size))
+        canvas.fill((255, 255, 255))
 
         # Render the game board
-        self._render_board(board)
+        self._render_board(canvas, board)
 
         # Render UI components
         self._render_ui(game_state)
 
+        # The following line copies our drawings from `canvas` to the visible window
+        self.window.blit(canvas, canvas.get_rect())
+        pygame.event.pump()
         pygame.display.update()
-        self.clock.tick(30)  # 30 FPS
 
-    def _render_board(self, board):
-        block_size = self.window_size // max(self.width, self.height)
-        for y in range(self.height):
-            for x in range(self.width):
-                if board[x][y]:
-                    pygame.draw.rect(
-                        self.window,
-                        (255, 255, 255),
-                        (x * block_size, y * block_size, block_size, block_size),
-                    )
+        pygame.display.update()
+
+        self.clock.tick(self.render_fps)
+
+        return None
+
+    def _render_board(self, canvas, board):
+        pix_square_size = self.window_size // max(self.width, self.height)
+        for x in range(self.width):
+            for y in range(self.height):
+                rect = pygame.Rect(
+                    pix_square_size * x,
+                    pix_square_size * y,
+                    pix_square_size,
+                    pix_square_size,
+                )
                 pygame.draw.rect(
-                    self.window,
-                    (50, 50, 50),
-                    (x * block_size, y * block_size, block_size, block_size),
-                    1,
+                    canvas,
+                    (0, 0, 0) if board[x, y] else (255, 255, 255),
+                    rect,
                 )
 
     def _render_ui(self, game_state):
@@ -157,7 +172,7 @@ class Renderer:
     def close(self):
         if self.window is not None:
             pygame.display.quit()
-            pygame.quit()
+            pygame.quit()  # TODO SHOULD I DO THE SELF = NONE BELOW?? VVVVVVVVVVVVVVVVVVVVVVVVV
             self.window = None
             self.clock = None
             self.font = None
