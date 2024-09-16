@@ -7,7 +7,7 @@ from gym_simpletetris.tetris.human_input_handler import HumanInputHandler
 from gym_simpletetris.ui.ui import UIManager, PiecePreview, HeldPiece, ScoreDisplay
 
 
-def play_tetris(render_mode="human", record_actions=False):
+def play_tetris(render_mode="human", record_actions=False, logic_updates_per_second=60):
     env = gym.make("SimpleTetris-v0", render_mode=render_mode)
     observation, info = env.reset()
 
@@ -18,17 +18,17 @@ def play_tetris(render_mode="human", record_actions=False):
     input_handler = HumanInputHandler(env.action_space, record_actions=record_actions)
     ui_manager = UIManager(*window_size)
 
-    ui_manager.add_component(HeldPiece(10, 120, 100, 100))
+    # ui_manager.add_component(HeldPiece(10, 120, 100, 100))
     screen = pygame.display.set_mode(window_size)
     clock = pygame.time.Clock()
 
     done = False
-    logic_updates_per_second = 60
     time_per_update = 1.0 / logic_updates_per_second
-    last_logic_time = time.time()
     pause_duration = 1.0  # Pause for 1 second after a line clear
     paused = False
     pause_end_time = 0
+    last_logic_time = time.time()
+    last_fps_time = last_logic_time
 
     while not done:
         current_time = time.time()
@@ -82,8 +82,13 @@ def play_tetris(render_mode="human", record_actions=False):
         # Update the display
         pygame.display.flip()
 
-        # Optional: Control the frame rate (remove or adjust as needed)
-        # clock.tick(60)  # Cap the FPS to 60 if desired
+        # Control the frame rate and track FPS
+        clock.tick(240)
+
+        # Print FPS every 0.5 seconds
+        if current_time - last_fps_time >= 0.5:
+            print(f"FPS: {clock.get_fps():.2f}")
+            last_fps_time = current_time
 
     env.close()
     input_handler.close()

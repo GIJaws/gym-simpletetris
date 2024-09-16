@@ -70,13 +70,6 @@ def idle(shape, anchor, board):
     return (shape, anchor)
 
 
-def process_combined_actions(actions, shape, anchor, board):
-    # Process each action in the combined action
-    for action in actions:
-        shape, anchor = action(shape, anchor, board)
-    return shape, anchor
-
-
 class TetrisEngine:
     def __init__(
         self,
@@ -115,23 +108,6 @@ class TetrisEngine:
             5: rotate_right,  # Rotate Right
             6: self.hold_swap,  # Hold/Swap
             7: idle,  # Idle
-            # Combined actions
-            8: lambda s, a, b: process_combined_actions([left, rotate_left], s, a, b),  # Left + Rotate Left
-            9: lambda s, a, b: process_combined_actions([left, rotate_right], s, a, b),  # Left + Rotate Right
-            10: lambda s, a, b: process_combined_actions([right, rotate_left], s, a, b),  # Right + Rotate Left
-            11: lambda s, a, b: process_combined_actions([right, rotate_right], s, a, b),  # Right + Rotate Right
-            12: lambda s, a, b: process_combined_actions([left, hard_drop], s, a, b),  # Left + Hard Drop
-            13: lambda s, a, b: process_combined_actions([left, soft_drop], s, a, b),  # Left + Soft Drop
-            14: lambda s, a, b: process_combined_actions([left, self.hold_swap], s, a, b),  # Left + Hold/Swap
-            15: lambda s, a, b: process_combined_actions([right, hard_drop], s, a, b),  # Right + Hard Drop
-            16: lambda s, a, b: process_combined_actions([right, soft_drop], s, a, b),  # Right + Soft Drop
-            17: lambda s, a, b: process_combined_actions([right, self.hold_swap], s, a, b),  # Right + Hold/Swap
-            18: lambda s, a, b: process_combined_actions([rotate_left, hard_drop], s, a, b),  # Rotate Left + Hard Drop
-            19: lambda s, a, b: process_combined_actions([rotate_left, soft_drop], s, a, b),  # Rotate Left + Soft Drop
-            20: lambda s, a, b: process_combined_actions([rotate_left, self.hold_swap], s, a, b),
-            21: lambda s, a, b: process_combined_actions([rotate_right, hard_drop], s, a, b),
-            22: lambda s, a, b: process_combined_actions([rotate_right, soft_drop], s, a, b),
-            23: lambda s, a, b: process_combined_actions([rotate_right, self.hold_swap], s, a, b),
         }
 
         self.action_value_map = dict([(j, i) for i, j in self.value_action_map.items()])
@@ -217,15 +193,6 @@ class TetrisEngine:
         self.holes = np.count_nonzero(self.board.cumsum(axis=1) * ~self.board.astype(bool))
         return self.holes
 
-    def valid_action_count(self):
-        valid_action_sum = 0
-
-        for value, fn in self.value_action_map.items():
-            if fn(self.shape, self.anchor, self.board) != (self.shape, self.anchor):
-                valid_action_sum += 1
-
-        return valid_action_sum
-
     def get_info(self):
         return {
             "time": self.time,
@@ -253,11 +220,23 @@ class TetrisEngine:
             ),
         )
 
-    def step(self, action):
-        self.anchor = (int(self.anchor[0]), int(self.anchor[1]))
+    def step(self, actions):
+        # Action priorities: lower numbers have higher priority
+        action_priority = {
+            0: 1,  # Move Left
+            1: 1,  # Move Right
+            2: 3,  # Hard Drop (highest priority)
+            3: 2,  # Soft Drop
+            4: 1,  # Rotate Left
+            5: 1,  # Rotate Right
+            6: 2,  # Hold/Swap
+            7: 0,  # Idle (lowest priority)
+        }
 
-        # Process either a single or combined action
-        self.shape, self.anchor = self.value_action_map[action](self.shape, self.anchor, self.board)
+        # Process each action in the sorted order
+        for action in sorted(actions, key=lambda action: action_priority[action]):
+            self.anchor = (int(self.anchor[0]), int(self.anchor[1]))
+            self.shape, self.anchor = self.value_action_map[action](self.shape, self.anchor, self.board)
 
         self.time += 1
         self.gravity_timer += 1
@@ -266,7 +245,7 @@ class TetrisEngine:
         done = False
         cleared_lines = 0
 
-        if action == 2 or self.gravity_timer >= self.gravity_interval and self.gravity_interval != float("inf"):
+        if 2 in actions or self.gravity_timer >= self.gravity_interval and self.gravity_interval != float("inf"):
             self.gravity_timer = 0
             self.shape, new_anchor = soft_drop(self.shape, self.anchor, self.board)
             if self._step_reset and (self.anchor != new_anchor):

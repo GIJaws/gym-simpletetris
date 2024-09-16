@@ -12,7 +12,6 @@ class HumanInputHandler(InputHandler):
         self.action_space = action_space
         self.record_actions = record_actions
         self.actions = []
-        self.current_action = None  # Store the current action
 
         # Initialize Pygame keys and actions
         self.key_action_map = {
@@ -26,74 +25,26 @@ class HumanInputHandler(InputHandler):
             pygame.K_ESCAPE: "quit",
         }
 
-        # Automate action combination generation
-        self.combination_action_map = self.generate_combinations(self.key_action_map)
-
-    def generate_combinations(self, key_action_map):
-        # Define action groups that can logically be combined
-        movement_actions = [0, 1]  # Left, Right
-        rotation_actions = [4, 5]  # Rotate Left, Rotate Right
-        other_actions = [2, 3, 6]  # Hard Drop, Soft Drop, Hold/Swap
-
-        # Create all valid combinations of these actions
-        valid_combinations = list(
-            itertools.chain(
-                itertools.product(movement_actions, rotation_actions),
-                itertools.product(movement_actions, other_actions),
-                itertools.product(rotation_actions, other_actions),
-            )
-        )
-
-        # Map combinations to unique action values
-        combination_map = {}
-        for idx, combo in enumerate(valid_combinations, start=8):
-            combination_map[combo] = idx  # Start assigning actions from 8 upwards
-
-        return combination_map
-
     def get_action(self, observation):
         keys = pygame.key.get_pressed()
-        actions = []
 
         # Only log if any relevant keys are pressed
-        relevant_keys_pressed = any(keys[key] for key in self.key_action_map.keys())
+        # relevant_keys_pressed = any(keys[key] for key in self.key_action_map)
 
-        if relevant_keys_pressed:
-            logging.info(f"Keys pressed: {[pygame.key.name(key) for key in self.key_action_map if keys[key]]}")
+        # if relevant_keys_pressed:
+        #     logging.info(f"Keys pressed: {[pygame.key.name(key) for key in self.key_action_map if keys[key]]}")
 
-        # Track which actions are being processed
-        for key, action in self.key_action_map.items():
-            if keys[key]:
-                actions.append(action)
+        actions = [action for key, action in self.key_action_map.items() if keys[key]] or [7]
+        # logging.info(f"Current action set: {actions}")
 
         if "quit" in actions:
-            logging.info("Quit action detected")
+            # logging.info("Quit action detected")
             return "quit"
 
-        # Check if multiple actions are pressed and map to a combination
-        if len(actions) > 1:
-            action_tuple = tuple(sorted(actions))
-            if action_tuple in self.combination_action_map:
-                combined_action = self.combination_action_map[action_tuple]
-                logging.info(f"Combination action detected: {combined_action}")
-                self.current_action = combined_action
-            else:
-                # If no predefined combination, pick the first action
-                logging.info(f"Multiple actions detected: {actions}")
-                self.current_action = actions[0]
-        elif actions:
-            self.current_action = actions[0]
-            logging.info(f"Current action set: {self.current_action}")
-        else:
-            if relevant_keys_pressed:  # Only log idle if keys were pressed
-                logging.info("No valid action detected, setting to idle.")
-            self.current_action = 7  # Idle action
-
         if self.record_actions:
-            self.actions.append((observation, self.current_action))
-            logging.debug(f"Recorded action: {self.current_action}")
+            self.actions.append((observation, actions))
 
-        return self.current_action
+        return actions
 
     def close(self):
         pass  # Do not quit Pygame here
