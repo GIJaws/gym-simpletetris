@@ -255,11 +255,9 @@ class TetrisEngine:
 
     def step(self, action):
         self.anchor = (int(self.anchor[0]), int(self.anchor[1]))
-        if action in self.value_action_map:
-            # Process either a single or combined action
-            self.shape, self.anchor = self.value_action_map[action](self.shape, self.anchor, self.board)
-        else:
-            raise KeyError(f"Action {action} is not mapped.")
+
+        # Process either a single or combined action
+        self.shape, self.anchor = self.value_action_map[action](self.shape, self.anchor, self.board)
 
         self.time += 1
         self.gravity_timer += 1
