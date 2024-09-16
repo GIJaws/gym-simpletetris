@@ -241,7 +241,7 @@ class TetrisEngine:
         done = False
         cleared_lines = 0
 
-        if self.gravity_timer >= self.gravity_interval and self.gravity_interval != float("inf"):
+        if action == 2 or self.gravity_timer >= self.gravity_interval and self.gravity_interval != float("inf"):
             self.gravity_timer = 0
             self.shape, new_anchor = soft_drop(self.shape, self.anchor, self.board)
             if self._step_reset and (self.anchor != new_anchor):

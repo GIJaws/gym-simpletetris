@@ -23,7 +23,7 @@ def play_tetris(render_mode="human", record_actions=False):
     clock = pygame.time.Clock()
 
     done = False
-    logic_updates_per_second = 10
+    logic_updates_per_second = 60
     time_per_update = 1.0 / logic_updates_per_second
     last_logic_time = time.time()
     pause_duration = 1.0  # Pause for 1 second after a line clear
