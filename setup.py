@@ -26,5 +26,10 @@ setup(
         "Operating System :: OS Independent",
     ],
     packages=find_packages(),
+    entry_points={
+        "console_scripts": [
+            "tetris-human-play=scripts.run_human_play:main",
+        ],
+    },
     python_requires=">=3.10",
 )

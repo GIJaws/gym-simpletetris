@@ -32,7 +32,7 @@ class Renderer:
         pygame.event.pump()
         pygame.display.update()
         self.clock.tick(30)  # Assuming 30 FPS, adjust as needed
-        return obs
+        return None
 
     def close(self):
         if self.window is not None:

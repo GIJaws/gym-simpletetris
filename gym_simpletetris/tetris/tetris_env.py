@@ -69,7 +69,10 @@ class TetrisEnv(gym.Env):
         return spaces.Box(0, 1, shape=shape, dtype=np.float32)
 
     def _get_info(self):
-        return self.engine.get_info()
+        info = self.engine.get_info()
+        info["next_piece"] = self.engine.next_piece
+        info["held_piece"] = self.engine.held_piece
+        return info
 
     def step(self, action):
         state, reward, done, cleared_lines = self.engine.step(action)

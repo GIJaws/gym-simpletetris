@@ -138,6 +138,7 @@ class TetrisEngine:
         self.nb_actions = len(self.value_action_map)
 
         self.held_piece = None  # No piece is held at the start
+        self.next_piece = None
 
         self.time = -1
         self.score = -1
