@@ -7,10 +7,8 @@ class HumanInputHandler(InputHandler):
         self.action_space = action_space
         self.record_actions = record_actions
         self.actions = []
-        pygame.init()
-        pygame.display.set_caption("Human Tetris")
-
-        # Updated key action map
+        self.current_action = None  # Store the current action
+        # Initialize Pygame keys
         self.key_action_map = {
             pygame.K_a: 0,  # Move Left
             pygame.K_d: 1,  # Move Right
@@ -23,40 +21,24 @@ class HumanInputHandler(InputHandler):
         }
 
     def get_action(self, observation):
-        action = 7  # Default action is 'idle'
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return "quit"
-
+        # Get the state of all keyboard buttons
         keys = pygame.key.get_pressed()
 
-        # Priority order: movement, rotation, other actions
-        if keys[pygame.K_a]:
-            action = self.key_action_map[pygame.K_a]
-        elif keys[pygame.K_d]:
-            action = self.key_action_map[pygame.K_d]
-
-        # Allow rotation while moving
-        if keys[pygame.K_LEFT]:
-            action = 8 if action in [0, 1] else 4  # 8: Move+RotateLeft, 4: RotateLeft
-        elif keys[pygame.K_RIGHT]:
-            action = 9 if action in [0, 1] else 5  # 9: Move+RotateRight, 5: RotateRight
-
-        # Other actions
-        if keys[pygame.K_w]:
-            action = self.key_action_map[pygame.K_w]
-        elif keys[pygame.K_s]:
-            action = self.key_action_map[pygame.K_s]
-        elif keys[pygame.K_LSHIFT]:
-            action = self.key_action_map[pygame.K_LSHIFT]
-        elif keys[pygame.K_ESCAPE]:
-            return "quit"
+        # Determine action based on keys pressed
+        for key, action in self.key_action_map.items():
+            if keys[key]:
+                if action == "quit":
+                    return "quit"
+                else:
+                    self.current_action = action
+                    break
+        else:
+            self.current_action = 7  # Default to 'idle' if no key is pressed
 
         if self.record_actions:
-            self.actions.append((observation, action))
+            self.actions.append((observation, self.current_action))
 
-        return action
+        return self.current_action
 
     def close(self):
-        pygame.quit()
+        pass  # Do not quit Pygame here

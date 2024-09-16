@@ -11,56 +11,51 @@ def play_tetris(render_mode="human", record_actions=False):
     env = gym.make("SimpleTetris-v0", render_mode=render_mode)
     observation, info = env.reset()
 
-    input_handler = HumanInputHandler(env.action_space, record_actions=record_actions)
-    ui_manager = UIManager()
-
-    ui_manager.add_component(PiecePreview(10, 10, 100, 100))
-    ui_manager.add_component(HeldPiece(10, 120, 100, 100))
-    ui_manager.add_component(ScoreDisplay(10, 230, 100, 30))
-
     # Initialize Pygame and create a window
     pygame.init()
     window_size = (400, 500)  # Adjust as needed
+
+    input_handler = HumanInputHandler(env.action_space, record_actions=record_actions)
+    ui_manager = UIManager(*window_size)
+
+    ui_manager.add_component(HeldPiece(10, 120, 100, 100))
     screen = pygame.display.set_mode(window_size)
     clock = pygame.time.Clock()
 
     done = False
     logic_updates_per_second = 10
     time_per_update = 1.0 / logic_updates_per_second
-    last_time = time.time()
-    lag = 0.0
+    last_logic_time = time.time()
     pause_duration = 1.0  # Pause for 1 second after a line clear
     paused = False
     pause_end_time = 0
 
     while not done:
         current_time = time.time()
-        elapsed_time = current_time - last_time
-        last_time = current_time
-        lag += elapsed_time
+        elapsed_time = current_time - last_logic_time
 
-        if paused and current_time < pause_end_time:
-            # Skip game updates and rendering during the pause
-            continue
-        elif paused and current_time >= pause_end_time:
-            # End the pause and resume the game
-            paused = False
-
-        # Game logic update
-        while lag >= time_per_update:
-            action = input_handler.get_action(observation)
-            if action == "quit":
+        # Process Pygame events every frame
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
                 done = True
                 break
 
+        # Handle input every frame
+        action = input_handler.get_action(observation)
+        if action == "quit":
+            done = True
+            break
+
+        # Update game logic at fixed intervals
+        if not paused and (current_time - last_logic_time) >= time_per_update:
             observation, reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
             ui_manager.update(info)
+            # Handle game over or reset
+            if terminated or truncated:
+                observation, info = env.reset()
 
-            # Access cleared_lines from info dictionary
+            # Handle line clear pause
             cleared_lines = info.get("cleared_lines", 0)
-
-            # Pause the game if lines were cleared
             if cleared_lines > 0:
                 paused = True
                 pause_end_time = current_time + pause_duration
@@ -68,30 +63,20 @@ def play_tetris(render_mode="human", record_actions=False):
                     f"Paused for {pause_duration} seconds after clearing {cleared_lines} lines."
                 )
 
-            lag -= time_per_update
-            if terminated or truncated:
-                observation, info = env.reset()
+            last_logic_time = current_time
 
-        # Render the game state
+        # Check if pause duration is over
+        if paused and current_time >= pause_end_time:
+            paused = False
+
+        # Render the game state every frame
         board_array = env.render()
 
         # Convert the numpy array to a Pygame surface
-        try:
-            if board_array is not None:  # Check if board_array is not None
-                board_surface = pygame.surfarray.make_surface(
-                    board_array.swapaxes(0, 1)
-                )
-                screen.blit(board_surface, (0, 0))
-        except ValueError as e:
-            print(f"Error converting board array to surface: {e}")
-            print(f"Array shape: {board_array.shape}, dtype: {board_array.dtype}")
-            continue
-
-        # # Clear the screen
-        # screen.fill((0, 0, 0))  # Fill with black
-
-        # # Draw the Tetris board
-        # screen.blit(board_surface, (0, 0))
+        if board_array is not None:
+            board_surface = pygame.surfarray.make_surface(board_array.swapaxes(0, 1))
+            screen.fill((0, 0, 0))  # Fill with black
+            screen.blit(board_surface, (0, 0))
 
         # Draw UI components
         ui_manager.draw(screen)
@@ -99,19 +84,9 @@ def play_tetris(render_mode="human", record_actions=False):
         # Update the display
         pygame.display.flip()
 
-        # Cap the frame rate
-        clock.tick(60)  # 60 FPS cap
+        # Optional: Control the frame rate (remove or adjust as needed)
+        # clock.tick(60)  # Cap the FPS to 60 if desired
 
     env.close()
     input_handler.close()
     pygame.quit()
-
-    if isinstance(input_handler, HumanInputHandler) and input_handler.record_actions:
-        with open("training_data.pkl", "wb") as f:
-            import pickle
-
-            pickle.dump(input_handler.actions, f)
-
-
-if __name__ == "__main__":
-    play_tetris()

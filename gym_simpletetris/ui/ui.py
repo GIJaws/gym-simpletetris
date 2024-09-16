@@ -62,8 +62,23 @@ class ScoreDisplay(UIComponent):
 
 
 class UIManager:
-    def __init__(self):
+    def __init__(self, width, height):
         self.components = []
+        self.width = width
+        self.height = height
+        self.buffer = pygame.Surface((width, height))
+
+    def draw(self, surface):
+        self.buffer.fill((0, 0, 0))  # Clear buffer
+        for component in self.components:
+            component.draw(self.buffer)
+        surface.blit(self.buffer, (0, 0))  # Draw buffer to screen
+
+    def update_buffer_size(self):
+        display_info = pygame.display.Info()
+        self.width = display_info.current_w
+        self.height = display_info.current_h
+        self.buffer = pygame.Surface((self.width, self.height))
 
     def add_component(self, component):
         self.components.append(component)
@@ -74,7 +89,3 @@ class UIManager:
     def update(self, game_state):
         for component in self.components:
             component.update(game_state)
-
-    def draw(self, surface):
-        for component in self.components:
-            component.draw(surface)

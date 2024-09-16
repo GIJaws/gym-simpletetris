@@ -140,6 +140,9 @@ class TetrisEngine:
         self.held_piece = None  # No piece is held at the start
         self.next_piece = None
 
+        self.level = 1
+        self.lines_for_next_level = 10  # Number of lines to clear for next level
+
         self.time = -1
         self.score = -1
         self.holes = 0
@@ -194,10 +197,16 @@ class TetrisEngine:
             if not can_clear[i]:
                 new_board[:, j] = self.board[:, i]
                 j -= 1
-        self.lines_cleared += sum(can_clear)
+        cleared_lines = sum(can_clear)
+        self.lines_cleared += cleared_lines
         self.board = new_board
 
-        return sum(can_clear)
+        # Update level
+        if self.lines_cleared >= self.lines_for_next_level:
+            self.level += 1
+            self.lines_for_next_level += 10  # Increase lines needed for next level
+
+        return cleared_lines
 
     def _count_holes(self):
         self.holes = np.count_nonzero(
@@ -223,6 +232,7 @@ class TetrisEngine:
             "holes": self.holes,
             "deaths": self.n_deaths,
             "statistics": self.shape_counts,
+            "level": self.level,
         }
 
     def step(self, action):

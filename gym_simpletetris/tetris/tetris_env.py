@@ -6,7 +6,7 @@ from .renderer import Renderer
 
 
 class TetrisEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 8}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
 
     def __init__(
         self,
@@ -104,7 +104,8 @@ class TetrisEnv(gym.Env):
         if self.render_mode == "rgb_array":
             return self.renderer.render_rgb_array(self.engine.render())
         elif self.render_mode == "human":
-            return self.renderer.render_human(self.engine.render())
+            game_state = self._get_info()
+            return self.renderer.render_human(self.engine.render(), game_state)
         else:
             raise ValueError(f"Unsupported render mode: {self.render_mode}")
 

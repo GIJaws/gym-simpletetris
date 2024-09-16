@@ -1,5 +1,5 @@
-import numpy as np
 import pygame
+import numpy as np
 
 
 class Renderer:
@@ -9,37 +9,90 @@ class Renderer:
         self.window_size = window_size
         self.window = None
         self.clock = None
+        self.font = None
 
     def render_rgb_array(self, board):
         obs = self._convert_grayscale(board, 160)
         return self._convert_grayscale_rgb(obs)
 
-    def render_human(self, board):
+    def render_human(self, board, game_state):
         if self.window is None:
             pygame.init()
             pygame.display.init()
             self.window = pygame.display.set_mode((self.window_size, self.window_size))
         if self.clock is None:
             self.clock = pygame.time.Clock()
+        if self.font is None:
+            self.font = pygame.font.Font(None, 24)
 
-        obs = np.transpose(board)
-        obs = self._convert_grayscale(obs, self.window_size)
-        obs = self._convert_grayscale_rgb(obs)
+        self.window.fill((0, 0, 0))  # Clear screen
 
-        pygame.pixelcopy.array_to_surface(self.window, obs)
-        canvas = pygame.surfarray.make_surface(obs)
-        self.window.blit(canvas, canvas.get_rect())
-        pygame.event.pump()
+        # Render the game board
+        self._render_board(board)
+
+        # Render UI components
+        self._render_ui(game_state)
+
         pygame.display.update()
-        self.clock.tick(30)  # Assuming 30 FPS, adjust as needed
-        return None
+        self.clock.tick(30)  # 30 FPS
 
-    def close(self):
-        if self.window is not None:
-            pygame.display.quit()
-            pygame.quit()
-            self.window = None
-            self.clock = None
+    def _render_board(self, board):
+        block_size = self.window_size // max(self.width, self.height)
+        for y in range(self.height):
+            for x in range(self.width):
+                if board[x][y]:
+                    pygame.draw.rect(
+                        self.window,
+                        (255, 255, 255),
+                        (x * block_size, y * block_size, block_size, block_size),
+                    )
+                pygame.draw.rect(
+                    self.window,
+                    (50, 50, 50),
+                    (x * block_size, y * block_size, block_size, block_size),
+                    1,
+                )
+
+    def _render_ui(self, game_state):
+        score_text = self.font.render(
+            f"Score: {game_state['score']}", True, (255, 255, 255)
+        )
+        self.window.blit(score_text, (10, 10))
+
+        lines_text = self.font.render(
+            f"Lines: {game_state['lines_cleared']}", True, (255, 255, 255)
+        )
+        self.window.blit(lines_text, (10, 40))
+
+        level_text = self.font.render(
+            f"Level: {game_state['level']}", True, (255, 255, 255)
+        )
+        self.window.blit(level_text, (10, 70))
+
+        # Render held piece
+        self._render_piece(
+            game_state["held_piece"], (self.window_size - 100, 10), (100, 100)
+        )
+
+        # Render next piece
+        self._render_piece(
+            game_state["next_piece"], (self.window_size - 100, 120), (100, 100)
+        )
+
+    def _render_piece(self, piece, pos, size):
+        if piece:
+            block_size = min(size[0], size[1]) // 4
+            for x, y in piece:
+                pygame.draw.rect(
+                    self.window,
+                    (200, 200, 200),
+                    (
+                        pos[0] + (x + 1) * block_size,
+                        pos[1] + (y + 1) * block_size,
+                        block_size,
+                        block_size,
+                    ),
+                )
 
     def _convert_grayscale(self, board, size):
         border_shade = 0
@@ -112,3 +165,11 @@ class Renderer:
         grayscale = np.reshape(array, newshape=(*shape, 1))
 
         return np.repeat(grayscale, 3, axis=2)
+
+    def close(self):
+        if self.window is not None:
+            pygame.display.quit()
+            pygame.quit()
+            self.window = None
+            self.clock = None
+            self.font = None
