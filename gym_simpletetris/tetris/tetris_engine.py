@@ -131,18 +131,24 @@ class TetrisEngine:
         self._lock_delay = 0
         self._step_reset = step_reset
 
+    # TODO make this functional so no side effects can occur to prevent future bugs
     def hold_swap(self, shape, anchor, board):
+
+        # assume that shape, anchor, and board is the same as self
         if self.held_piece is None:
             # If no piece is currently held, hold the current piece
-            self.held_piece = shape
+            self.held_piece = self.shape
             self.held_piece_name = self.shape_name
             self._new_piece()  # Generate a new piece to replace the held one
         else:
             # Swap the current piece with the held piece
-            shape, self.held_piece = self.held_piece, shape
-            self.shape_name, self.held_piece_name = self.shape_name, self.held_piece_name
+            self.shape, self.held_piece = self.held_piece, self.shape
+            self.shape_name, self.held_piece_name = (
+                self.held_piece_name,
+                self.shape_name,
+            )
 
-        return shape, anchor
+        return self.shape, self.anchor
 
     def _new_piece(self):
         self.anchor = (self.width // 2, 0)
@@ -187,6 +193,7 @@ class TetrisEngine:
         return self.holes
 
     def get_info(self):
+        print(self.held_piece_name)
         return {
             "time": self.time,
             "current_piece": self.shape_name,
