@@ -74,6 +74,7 @@ class TetrisEngine:
         penalise_holes=False,
         penalise_holes_increase=False,
         initial_level=1,
+        preview_size=4,
     ):
         self.width = width
         self.height = height
@@ -104,7 +105,7 @@ class TetrisEngine:
 
         self.held_piece = None  # No piece is held at the start
 
-        self.piece_queue = PieceQueue()
+        self.piece_queue = PieceQueue(preview_size)
         self.next_piece = None
         self.shape_counts = dict(zip(SHAPE_NAMES, [0] * len(SHAPES)))
         self.shape = None
@@ -308,26 +309,29 @@ class TetrisEngine:
 
 
 class PieceQueue:
-    def __init__(self):
+    def __init__(self, preview_size=4):
+        self.preview_size = max(1, preview_size)  # Ensure at least 1 piece in preview
         self.pieces = []
         self.bag = []
         self.refill_bag()
         self.fill_queue()
 
     def refill_bag(self):
-        self.bag = list("TJLZSIO")
+        self.bag = list(SHAPE_NAMES)
         random.shuffle(self.bag)
 
     def next_piece(self):
-        if not self.pieces:
+        if len(self.pieces) <= self.preview_size:
             self.fill_queue()
         return self.pieces.pop(0)
 
     def fill_queue(self):
-        while len(self.pieces) < 6:  # Show 6 preview pieces
+        while len(self.pieces) < self.preview_size * 2:  # Keep 2x preview size in queue
             if not self.bag:
                 self.refill_bag()
             self.pieces.append(self.bag.pop())
 
     def get_preview(self):
-        return self.pieces.copy()
+        while len(self.pieces) < self.preview_size:
+            self.fill_queue()
+        return self.pieces[: self.preview_size]
