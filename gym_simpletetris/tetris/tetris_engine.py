@@ -154,7 +154,7 @@ class TetrisEngine:
         return is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)
 
     def _clear_lines(self):
-        can_clear = [np.all(self.board[:, i]) for i in range(self.height)]
+        can_clear = [np.all(self.board[:, i] != (0, 0, 0)) for i in range(self.height)]
         new_board = np.zeros_like(self.board)
         j = self.height - 1
         for i in range(self.height - 1, -1, -1):
