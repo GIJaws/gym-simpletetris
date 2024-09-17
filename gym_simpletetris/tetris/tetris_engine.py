@@ -17,7 +17,7 @@ def is_occupied(shape, anchor, board):
         x, y = anchor[0] + i, anchor[1] + j
         if y < 0:
             continue
-        if x < 0 or x >= board.shape[0] or y >= board.shape[1] or board[x, y]:
+        if x < 0 or x >= board.shape[0] or y >= board.shape[1] or np.any(board[x, y]):
             return True
     return False
 
@@ -78,7 +78,7 @@ class TetrisEngine:
     ):
         self.width = width
         self.height = height
-        self.board = np.zeros(shape=(width, height), dtype=np.float32)
+        self.board = np.zeros(shape=(width, height, 3), dtype=np.uint8)
         self.scoring_system = ScoringSystem(
             reward_step,
             penalise_height,
@@ -106,7 +106,6 @@ class TetrisEngine:
         self.held_piece = None  # No piece is held at the start
 
         self.piece_queue = PieceQueue(preview_size)
-        self.next_piece = None
         self.shape_counts = dict(zip(SHAPE_NAMES, [0] * len(SHAPES)))
         self.shape = None
         self.shape_name = None
@@ -144,10 +143,10 @@ class TetrisEngine:
         return shape, anchor
 
     def _new_piece(self):
-        self.anchor = (self.width / 2, 0)
-        self.next_piece = self.piece_queue.next_piece()
-        self.shape_counts[self.next_piece] += 1
-        self.shape = SHAPES[self.next_piece]
+        self.anchor = (self.width // 2, 0)
+        self.shape_name = self.piece_queue.next_piece()
+        self.shape_counts[self.shape_name] += 1
+        self.shape = SHAPES[self.shape_name]["shape"]
 
     def _has_dropped(self):
         return is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)
@@ -287,10 +286,12 @@ class TetrisEngine:
         return state
 
     def _set_piece(self, on=False):
-        for i, j in self.shape:
-            x, y = i + self.anchor[0], j + self.anchor[1]
-            if x < self.width and x >= 0 and y < self.height and y >= 0:
-                self.board[int(self.anchor[0] + i), int(self.anchor[1] + j)] = on
+        if self.shape_name:
+            color = SHAPES[self.shape_name]["color"] if on else (0, 0, 0)
+            for i, j in self.shape:
+                x, y = int(self.anchor[0] + i), int(self.anchor[1] + j)
+                if 0 <= x < self.width and 0 <= y < self.height:
+                    self.board[x, y] = color
 
     def __repr__(self):
         self._set_piece(True)

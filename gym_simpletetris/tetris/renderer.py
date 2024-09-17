@@ -31,8 +31,14 @@ class Renderer:
             return self.render_human(board, gamestate)
 
     def render_rgb_array(self, board):
-        obs = self._convert_grayscale(board, 160)
-        return self._convert_grayscale_rgb(obs)
+        return self._convert_grayscale(board, 160)
+
+    def _convert_grayscale_rgb(self, array):
+        shape = array.shape
+        shape = (shape[0], shape[1])
+        grayscale = np.reshape(array, newshape=(*shape, 1))
+
+        return np.repeat(grayscale, 3, axis=2)
 
     def render_human(self, board, game_state):
         # assume pygame has been intialised when the Renderer object is created
@@ -51,14 +57,15 @@ class Renderer:
 
         self.clock.tick(self.render_fps)
 
-        return None
+        return None  # human render mode should return None
 
     def _render_board(self, board):
         for y in range(self.height):
             for x in range(self.width):
                 rect = pygame.Rect(x * self.block_size, y * self.block_size, self.block_size, self.block_size)
-                if board[x][y]:
-                    pygame.draw.rect(self.window, (255, 255, 255), rect)  # White for filled blocks
+                color = tuple(board[x][y])
+                if any(color):  # If the color is not black
+                    pygame.draw.rect(self.window, color, rect)
                 pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
 
     def _render_ui(self, game_state):
@@ -107,7 +114,7 @@ class Renderer:
 
             # Draw pieces
             for i, piece in enumerate(pieces):
-                shape = SHAPES[piece]
+                shape = SHAPES[piece]["shape"]
                 # Calculate bounds of the shape
                 min_x = min(x for x, y in shape)
                 max_x = max(x for x, y in shape)
@@ -133,15 +140,11 @@ class Renderer:
                     )
 
     def _convert_grayscale(self, board, size):
-        border_shade = 0
-        background_shade = 128
-        piece_shade = 190
-
         arr = np.array(board, dtype=np.uint8)
-        arr = np.transpose(arr)
+        arr = np.transpose(arr, (1, 0, 2))  # Transpose to match the expected shape
 
-        shape = arr.shape
-        limiting_dim = max(shape[0], shape[1])
+        shape = arr.shape[:2]
+        limiting_dim = max(shape)
 
         gap_size = (size // 100) + 1
         block_size = ((size - (2 * gap_size)) // limiting_dim) - gap_size
@@ -152,55 +155,16 @@ class Renderer:
         padding_width = (size - inner_width) // 2
         padding_height = (size - inner_height) // 2
 
-        arr[arr == 0] = background_shade
-        arr[arr == 1] = piece_shade
+        result = np.zeros((size, size, 3), dtype=np.uint8)
 
-        arr = np.repeat(arr, block_size, axis=0)
-        arr = np.repeat(arr, block_size, axis=1)
+        for i in range(shape[0]):
+            for j in range(shape[1]):
+                if np.any(arr[i, j]):
+                    x_start = padding_width + gap_size + i * (block_size + gap_size)
+                    y_start = padding_height + gap_size + j * (block_size + gap_size)
+                    result[y_start : y_start + block_size, x_start : x_start + block_size] = arr[i, j]
 
-        arr = np.insert(
-            arr,
-            np.repeat(
-                [block_size * x for x in range(shape[0] + 1)],
-                [gap_size for _ in range(shape[0] + 1)],
-            ),
-            background_shade,
-            axis=0,
-        )
-        arr = np.insert(
-            arr,
-            np.repeat(
-                [block_size * x for x in range(shape[1] + 1)],
-                [gap_size for _ in range(shape[1] + 1)],
-            ),
-            background_shade,
-            axis=1,
-        )
-
-        arr = np.insert(
-            arr,
-            np.repeat([0, len(arr)], [padding_width, size - (padding_width + len(arr))]),
-            border_shade,
-            axis=0,
-        )
-        arr = np.insert(
-            arr,
-            np.repeat(
-                [0, len(arr[0])],
-                [padding_height, size - (padding_height + len(arr[0]))],
-            ),
-            border_shade,
-            axis=1,
-        )
-
-        return arr
-
-    def _convert_grayscale_rgb(self, array):
-        shape = array.shape
-        shape = (shape[0], shape[1])
-        grayscale = np.reshape(array, newshape=(*shape, 1))
-
-        return np.repeat(grayscale, 3, axis=2)
+        return result
 
     def close(self):
         if self.window is not None:

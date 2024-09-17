@@ -52,16 +52,16 @@ class TetrisEnv(gym.Env):
     def _get_observation_space(self):
         if self.obs_type == "ram":
             shape = (
-                (self.renderer.width, self.renderer.height, 1)
+                (self.renderer.width, self.renderer.height, 3)
                 if self.extend_dims
-                else (self.renderer.width, self.renderer.height)
+                else (self.renderer.width, self.renderer.height, 3)
             )
         elif self.obs_type in ["grayscale", "rgb"]:
             shape = (84, 84, 1) if self.obs_type == "grayscale" and self.extend_dims else (84, 84, 3)
         else:
             raise ValueError(f"Unsupported observation type: {self.obs_type}")
 
-        return spaces.Box(0, 1, shape=shape, dtype=np.float32)
+        return spaces.Box(0, 255, shape=shape, dtype=np.uint8)
 
     def step(self, action):
         state, reward, done = self.engine.step(action)
@@ -76,14 +76,14 @@ class TetrisEnv(gym.Env):
 
     def _get_observation(self, state):
         if self.obs_type == "ram":
-            obs = state if not self.extend_dims else np.expand_dims(state, axis=-1)
+            obs = state
         elif self.obs_type in ["grayscale", "rgb"]:
             obs = self.renderer.render_rgb_array(state)
             if self.obs_type == "grayscale":
                 obs = np.mean(obs, axis=-1, keepdims=self.extend_dims)
         else:
             raise ValueError(f"Unsupported observation type: {self.obs_type}")
-        return obs.astype(np.float32)
+        return obs.astype(np.uint8)
 
     def render(self):
         return self.renderer.render(self.engine.render(), self.engine.get_info())
