@@ -193,7 +193,6 @@ class TetrisEngine:
         return self.holes
 
     def get_info(self):
-        print(self.held_piece_name)
         return {
             "time": self.time,
             "current_piece": self.shape_name,
