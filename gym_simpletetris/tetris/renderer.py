@@ -9,11 +9,12 @@ class Renderer:
         self.render_mode = render_mode
         self.render_fps = render_fps
         self.window_size = window_size
+        self.block_size = self.window_size // max(self.width, self.height)
         self.window = None
         self.clock = None
         self.font = None
 
-        # Initialize Pygame here
+        # Initialize Pygame here only if human playing
         if self.render_mode == "human":
             pygame.init()
             pygame.display.init()
@@ -32,57 +33,48 @@ class Renderer:
         return self._convert_grayscale_rgb(obs)
 
     def render_human(self, board, game_state):
-        canvas = pygame.Surface((self.window_size, self.window_size))
-        canvas.fill((255, 255, 255))
+        # assume pygame has been intialised when the Renderer object is created
+
+        self.window.fill((0, 0, 0))  # Clear screen with black background
 
         # Render the game board
-        self._render_board(canvas, board)
+        self._render_board(board)
 
         # Render UI components
         self._render_ui(game_state)
 
-        # The following line copies our drawings from `canvas` to the visible window
-        self.window.blit(canvas, canvas.get_rect())
         pygame.event.pump()
-        pygame.display.update()
 
         pygame.display.update()
 
         self.clock.tick(self.render_fps)
 
+        print(self.clock.get_fps())
         return None
 
-    def _render_board(self, canvas, board):
-        pix_square_size = self.window_size // max(self.width, self.height)
-        for x in range(self.width):
-            for y in range(self.height):
-                rect = pygame.Rect(
-                    pix_square_size * x,
-                    pix_square_size * y,
-                    pix_square_size,
-                    pix_square_size,
-                )
-                pygame.draw.rect(
-                    canvas,
-                    (0, 0, 0) if board[x, y] else (255, 255, 255),
-                    rect,
-                )
+    def _render_board(self, board):
+        for y in range(self.height):
+            for x in range(self.width):
+                rect = pygame.Rect(x * self.block_size, y * self.block_size, self.block_size, self.block_size)
+                if board[x][y]:
+                    pygame.draw.rect(self.window, (255, 255, 255), rect)  # White for filled blocks
+                pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
 
     def _render_ui(self, game_state):
-        score_text = self.font.render(f"Score: {game_state['score']}", True, (255, 255, 255))
-        self.window.blit(score_text, (10, 10))
-
-        lines_text = self.font.render(f"Lines: {game_state['lines_cleared']}", True, (255, 255, 255))
-        self.window.blit(lines_text, (10, 40))
-
-        level_text = self.font.render(f"Level: {game_state['level']}", True, (255, 255, 255))
-        self.window.blit(level_text, (10, 70))
+        # Render score, lines, and level
+        self._render_text(f"Score: {game_state['score']}", (10, 10))
+        self._render_text(f"Lines: {game_state['lines_cleared']}", (10, 40))
+        self._render_text(f"Level: {game_state['level']}", (10, 70))
 
         # Render held piece
-        self._render_piece(game_state["held_piece"], (self.window_size - 100, 10), (100, 100))
+        self._render_piece_preview(game_state["held_piece"], (self.window_size - 100, 10), "Held")
 
         # Render next piece
-        self._render_piece(game_state["next_piece"], (self.window_size - 100, 120), (100, 100))
+        self._render_piece_preview(game_state["next_piece"], (self.window_size - 100, 120), "Next")
+
+    def _render_text(self, text, pos):
+        text_surface = self.font.render(text, True, (255, 255, 255))
+        self.window.blit(text_surface, pos)
 
     def _render_piece(self, piece, pos, size):
         if piece:
@@ -96,6 +88,30 @@ class Renderer:
                         pos[1] + (y + 1) * block_size,
                         block_size,
                         block_size,
+                    ),
+                )
+
+    def _render_piece_preview(self, piece, pos, label):
+        if piece:
+            preview_size = 80
+            block_size = preview_size // 4
+
+            # Draw label
+            self._render_text(label, (pos[0], pos[1] - 30))
+
+            # Draw background
+            pygame.draw.rect(self.window, (50, 50, 50), (pos[0], pos[1], preview_size, preview_size))
+
+            # Draw piece
+            for x, y in piece:
+                pygame.draw.rect(
+                    self.window,
+                    (255, 255, 255),
+                    (
+                        pos[0] + (x + 1) * block_size,
+                        pos[1] + (y + 1) * block_size,
+                        block_size - 1,
+                        block_size - 1,
                     ),
                 )
 
