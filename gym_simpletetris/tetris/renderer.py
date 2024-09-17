@@ -69,44 +69,34 @@ class Renderer:
                 pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
 
     def _render_ui(self, game_state):
+
+        x_offset = 2 * ((self.window_size - self.width * self.block_size) // 2)
         # Render score, lines, and level
-        self._render_text(f"Score: {game_state['score']}", (10, 10))
-        self._render_text(f"Lines: {game_state['lines_cleared']}", (10, 40))
-        self._render_text(f"Level: {game_state['level']}", (10, 70))
+        self._render_text(f"Score: {game_state['score']}", (x_offset, 10))
+        self._render_text(f"Lines: {game_state['lines_cleared']}", (x_offset, 40))
+        self._render_text(f"Level: {game_state['level']}", (x_offset, 70))
+        self._render_text(f"FPS: {round(self.clock.get_fps(), 2)}", (x_offset, 100))
 
         # Render held piece
-        self._render_piece_preview(game_state["held_piece"], (self.window_size - 100, 10), "Held")
+        self._render_piece_preview(game_state["held_piece_name"], (x_offset, 10), "Held")
 
         # Render next piece
-        self._render_piece_preview(game_state["next_piece"], (self.window_size - 100, 120), "Next")
+        self._render_piece_preview(game_state["next_piece"], (x_offset, 130), "Next")
 
     def _render_text(self, text, pos):
         text_surface = self.font.render(text, True, (255, 255, 255))
         self.window.blit(text_surface, pos)
 
-    def _render_piece(self, piece, pos, size):
-        if piece:
-            block_size = min(size[0], size[1]) // 4
-            for x, y in piece:
-                pygame.draw.rect(
-                    self.window,
-                    (200, 200, 200),
-                    (
-                        pos[0] + (x + 1) * block_size,
-                        pos[1] + (y + 1) * block_size,
-                        block_size,
-                        block_size,
-                    ),
-                )
-
     def _render_piece_preview(self, pieces, pos, label):
+        if isinstance(pieces, str):
+            pieces = [pieces]
         if pieces:
             preview_size = 80
             block_size = preview_size // 5  # Slightly smaller blocks
-            spacing = 20  # Vertical spacing between pieces
+            spacing = 10  # Vertical spacing between pieces
 
             # Draw label
-            self._render_text(label, (pos[0], pos[1] - 30))
+            self._render_text(label, pos)
 
             # Draw background
             total_height = preview_size * len(pieces) + spacing * (len(pieces) - 1)

@@ -99,12 +99,12 @@ class TetrisEngine:
             6: self.hold_swap,  # Hold/Swap
             7: idle,  # Idle
         }
-
-        self.action_value_map = dict([(j, i) for i, j in self.value_action_map.items()])
-        self.nb_actions = len(self.value_action_map)
+        # TODO REMOVE THESE COMMENTS AND WORK OUT WHAT ELSE IS NOT BEING USED
+        # self.action_value_map = dict([(j, i) for i, j in self.value_action_map.items()])
+        # self.nb_actions = len(self.value_action_map)
 
         self.held_piece = None  # No piece is held at the start
-
+        self.held_piece_name = None
         self.piece_queue = PieceQueue(preview_size)
         self.shape_counts = dict(zip(SHAPE_NAMES, [0] * len(SHAPES)))
         self.shape = None
@@ -135,10 +135,12 @@ class TetrisEngine:
         if self.held_piece is None:
             # If no piece is currently held, hold the current piece
             self.held_piece = shape
+            self.held_piece_name = self.shape_name
             self._new_piece()  # Generate a new piece to replace the held one
         else:
             # Swap the current piece with the held piece
             shape, self.held_piece = self.held_piece, shape
+            self.shape_name, self.held_piece_name = self.shape_name, self.held_piece_name
 
         return shape, anchor
 
@@ -188,6 +190,7 @@ class TetrisEngine:
             "gravity_interval": self.gravity_interval,
             "next_piece": self.piece_queue.get_preview(),
             "held_piece": self.held_piece,
+            "held_piece_name": self.held_piece_name,
         }
 
     def _calculate_gravity_interval(self):
