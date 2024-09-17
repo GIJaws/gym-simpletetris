@@ -1,6 +1,8 @@
 import pygame
 import numpy as np
 
+from gym_simpletetris.tetris.tetris_shapes import SHAPES
+
 
 class Renderer:
     def __init__(self, width, height, render_mode, render_fps, window_size=512):
@@ -91,8 +93,8 @@ class Renderer:
                     ),
                 )
 
-    def _render_piece_preview(self, piece, pos, label):
-        if piece:
+    def _render_piece_preview(self, pieces, pos, label):
+        if pieces:
             preview_size = 80
             block_size = preview_size // 4
 
@@ -100,20 +102,22 @@ class Renderer:
             self._render_text(label, (pos[0], pos[1] - 30))
 
             # Draw background
-            pygame.draw.rect(self.window, (50, 50, 50), (pos[0], pos[1], preview_size, preview_size))
+            pygame.draw.rect(self.window, (50, 50, 50), (pos[0], pos[1], preview_size, preview_size * len(pieces)))
 
-            # Draw piece
-            for x, y in piece:
-                pygame.draw.rect(
-                    self.window,
-                    (255, 255, 255),
-                    (
-                        pos[0] + (x + 1) * block_size,
-                        pos[1] + (y + 1) * block_size,
-                        block_size - 1,
-                        block_size - 1,
-                    ),
-                )
+            # Draw pieces
+            for i, piece in enumerate(pieces):
+                shape = SHAPES[piece]
+                for x, y in shape:
+                    pygame.draw.rect(
+                        self.window,
+                        (255, 255, 255),
+                        (
+                            pos[0] + (x + 1) * block_size,
+                            pos[1] + (y + 1) * block_size + i * preview_size,
+                            block_size - 1,
+                            block_size - 1,
+                        ),
+                    )
 
     def _convert_grayscale(self, board, size):
         border_shade = 0

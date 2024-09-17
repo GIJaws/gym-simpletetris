@@ -1,19 +1,8 @@
 import random
+from typing_extensions import deprecated
 import numpy as np
 from .scoring_system import ScoringSystem
-
-# Adapted from the Tetris engine in the TetrisRL project by jaybutera
-# https://github.com/jaybutera/tetrisRL
-shapes = {
-    "T": [(0, 0), (-1, 0), (1, 0), (0, -1)],
-    "J": [(0, 0), (-1, 0), (0, -1), (0, -2)],
-    "L": [(0, 0), (1, 0), (0, -1), (0, -2)],
-    "Z": [(0, 0), (-1, 0), (0, -1), (1, -1)],
-    "S": [(0, 0), (-1, -1), (0, -1), (1, 0)],
-    "I": [(0, 0), (0, -1), (0, -2), (0, -3)],
-    "O": [(0, 0), (0, -1), (-1, 0), (-1, -1)],
-}
-shape_names = ["T", "J", "L", "Z", "S", "I", "O"]
+from .tetris_shapes import SHAPE_NAMES, SHAPES
 
 
 def rotated(shape, cclk=False):
@@ -24,7 +13,7 @@ def rotated(shape, cclk=False):
 
 
 def is_occupied(shape, anchor, board):
-    for i, j in shape:
+    for i, j in SHAPES[shape]:
         x, y = anchor[0] + i, anchor[1] + j
         if y < 0:
             continue
@@ -114,7 +103,13 @@ class TetrisEngine:
         self.nb_actions = len(self.value_action_map)
 
         self.held_piece = None  # No piece is held at the start
+
+        self.piece_queue = PieceQueue()
         self.next_piece = None
+        self.shape_counts = dict(zip(SHAPE_NAMES, [0] * len(SHAPES)))
+        self.shape = None
+        self.shape_name = None
+        self._new_piece()
 
         self.initial_level = initial_level
         self.level = initial_level
@@ -129,25 +124,12 @@ class TetrisEngine:
         self.lines_cleared = 0
         self.piece_height = 0
         self.anchor = None
-        self.shape = None
-        self.shape_name = None
+
         self.n_deaths = 0
 
         self._lock_delay_fn = lambda x: (x + 1) % (max(lock_delay, 0) + 1)
         self._lock_delay = 0
         self._step_reset = step_reset
-
-        self.shape_counts = dict(zip(shape_names, [0] * len(shapes)))
-
-    def _choose_shape(self):
-        values = list(self.shape_counts.values())
-        maxm = max(values)
-        m = [5 + maxm - x for x in values]
-        r = random.randint(1, sum(m))
-        for i, n in enumerate(m):
-            r -= n
-            if r <= 0:
-                return shape_names[i]
 
     def hold_swap(self, shape, anchor, board):
         if self.held_piece is None:
@@ -162,9 +144,9 @@ class TetrisEngine:
 
     def _new_piece(self):
         self.anchor = (self.width / 2, 0)
-        self.shape_name = self._choose_shape()
-        self.shape_counts[self.shape_name] += 1
-        self.shape = shapes[self.shape_name]
+        self.next_piece = self.piece_queue.next_piece()
+        self.shape_counts[self.next_piece] += 1
+        self.shape = self.next_piece
 
     def _has_dropped(self):
         return is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)
@@ -204,7 +186,7 @@ class TetrisEngine:
             "statistics": self.shape_counts,
             "level": self.level,
             "gravity_interval": self.gravity_interval,
-            "next_piece": self.next_piece,
+            "next_piece": self.piece_queue.get_preview(),
             "held_piece": self.held_piece,
         }
 
@@ -311,7 +293,7 @@ class TetrisEngine:
         return state
 
     def _set_piece(self, on=False):
-        for i, j in self.shape:
+        for i, j in SHAPES[self.shape]:
             x, y = i + self.anchor[0], j + self.anchor[1]
             if x < self.width and x >= 0 and y < self.height and y >= 0:
                 self.board[int(self.anchor[0] + i), int(self.anchor[1] + j)] = on
@@ -323,3 +305,29 @@ class TetrisEngine:
         s += "\no" + "-" * self.width + "o"
         self._set_piece(False)
         return s
+
+
+class PieceQueue:
+    def __init__(self):
+        self.pieces = []
+        self.bag = []
+        self.refill_bag()
+        self.fill_queue()
+
+    def refill_bag(self):
+        self.bag = list("TJLZSIO")
+        random.shuffle(self.bag)
+
+    def next_piece(self):
+        if not self.pieces:
+            self.fill_queue()
+        return self.pieces.pop(0)
+
+    def fill_queue(self):
+        while len(self.pieces) < 6:  # Show 6 preview pieces
+            if not self.bag:
+                self.refill_bag()
+            self.pieces.append(self.bag.pop())
+
+    def get_preview(self):
+        return self.pieces.copy()
