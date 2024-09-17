@@ -65,6 +65,8 @@ class TetrisEnv(gym.Env):
 
     def step(self, action):
         state, reward, done = self.engine.step(action)
+        if self.renderer.render_mode == "human":
+            self.render()
         return self._get_observation(state), reward, done, done, self.engine.get_info()
 
     def reset(self, seed=None, options=None):

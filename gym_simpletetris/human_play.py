@@ -19,9 +19,6 @@ def play_tetris(render_mode="human", record_actions=False):
         if action == "quit":
             done = True
             break
-
-        env.render()  # This line renders the current state
-
         if terminated or truncated:
             print(f"Game over! Score: {info['score']}")
             done = True
