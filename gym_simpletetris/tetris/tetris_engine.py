@@ -154,22 +154,31 @@ class TetrisEngine:
         return is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)
 
     def _clear_lines(self):
-        can_clear = [np.all(self.board[:, i] != (0, 0, 0)) for i in range(self.height)]
+        # Check if each row can be cleared (all blocks have non-zero values)
+        can_clear = [np.all(np.sum(self.board[:, i], axis=1) > 0) for i in range(self.height)]
+
+        # Create a new board
         new_board = np.zeros_like(self.board)
+
+        # Fill the new board from bottom to top, skipping cleared lines
         j = self.height - 1
         for i in range(self.height - 1, -1, -1):
             if not can_clear[i]:
                 new_board[:, j] = self.board[:, i]
                 j -= 1
+
+        # Count the number of cleared lines
         cleared_lines = sum(can_clear)
         self.lines_cleared += cleared_lines
+
+        # Update the board
         self.board = new_board
 
-        # Update level
+        # Update level if enough lines have been cleared
         if self.lines_cleared >= self.lines_for_next_level:
             self.level += 1
-            self.lines_for_next_level += 10  # Increase lines needed for next level
-            self.gravity_interval = self._calculate_gravity_interval()  # Recalculate speed
+            self.lines_for_next_level += 10  # Increase the threshold for the next level
+            self.gravity_interval = self._calculate_gravity_interval()  # Recalculate gravity
 
         return cleared_lines
 
