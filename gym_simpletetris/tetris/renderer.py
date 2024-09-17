@@ -130,7 +130,7 @@ class Renderer:
                 for x, y in shape:
                     pygame.draw.rect(
                         self.window,
-                        (255, 255, 255),
+                        SHAPES[piece]["color"],
                         (
                             pos[0] + offset_x + (x - min_x) * block_size,
                             pos[1] + offset_y + (y - min_y) * block_size + i * (preview_size + spacing),
