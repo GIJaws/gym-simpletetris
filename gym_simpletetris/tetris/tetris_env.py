@@ -86,7 +86,8 @@ class TetrisEnv(gym.Env):
         return obs.astype(np.uint8)
 
     def render(self):
-        return self.renderer.render(self.engine.render(), self.engine.get_info())
+        board, shape, ghost_anchor, ghost_color = self.engine.render()
+        return self.renderer.render(board, self.engine.get_info(), shape, ghost_anchor, ghost_color)
 
     def close(self):
         self.renderer.close()

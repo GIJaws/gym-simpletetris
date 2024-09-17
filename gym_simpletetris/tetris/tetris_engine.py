@@ -301,11 +301,22 @@ class TetrisEngine:
 
         return self.board
 
+    def get_ghost_piece_position(self):
+        ghost_anchor = list(self.anchor)
+        while not is_occupied(self.shape, (ghost_anchor[0], ghost_anchor[1] + 1), self.board):
+            ghost_anchor[1] += 1
+        return ghost_anchor
+
     def render(self):
         self._set_piece(True)
         state = np.copy(self.board)
         self._set_piece(False)
-        return state
+
+        # Add ghost piece
+        ghost_anchor = self.get_ghost_piece_position()
+        ghost_color = tuple(max(0, c - 50) for c in SHAPES[self.shape_name]["color"])  # Slightly darker color
+
+        return state, self.shape, ghost_anchor, ghost_color
 
     def _set_piece(self, on=False):
         if self.shape_name:

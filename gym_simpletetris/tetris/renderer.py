@@ -24,11 +24,12 @@ class Renderer:
             self.clock = pygame.time.Clock()
             self.font = pygame.font.Font(None, 24)
 
-    def render(self, board, gamestate):
+    def render(self, board, game_state, shape, ghost_anchor, ghost_color):
         if self.render_mode == "rgb_array":
             return self.render_rgb_array(board)
         elif self.render_mode == "human":
-            return self.render_human(board, gamestate)
+            # TODO THIS SHOULD NEVER GET CALLED WHAT DO???
+            return self.render_human(board, game_state, shape, ghost_anchor, ghost_color)
 
     def render_rgb_array(self, board):
         return self._convert_grayscale(board, 160)
@@ -40,26 +41,24 @@ class Renderer:
 
         return np.repeat(grayscale, 3, axis=2)
 
-    def render_human(self, board, game_state):
+    def render_human(self, board, game_state, shape, ghost_anchor, ghost_color):
         # assume pygame has been intialised when the Renderer object is created
 
         self.window.fill((0, 0, 0))  # Clear screen with black background
 
         # Render the game board
-        self._render_board(board)
+        self._render_board(board, shape, ghost_anchor, ghost_color)
 
         # Render UI components
         self._render_ui(game_state)
 
         pygame.event.pump()
-
         pygame.display.update()
-
         self.clock.tick(self.render_fps)
 
         return None  # human render mode should return None
 
-    def _render_board(self, board):
+    def _render_board(self, board, shape, ghost_anchor, ghost_color):
         for y in range(self.height):
             for x in range(self.width):
                 rect = pygame.Rect(x * self.block_size, y * self.block_size, self.block_size, self.block_size)
@@ -67,6 +66,13 @@ class Renderer:
                 if any(color):  # If the color is not black
                     pygame.draw.rect(self.window, color, rect)
                 pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
+
+        # Render ghost piece
+        for i, j in shape:
+            x, y = int(ghost_anchor[0] + i), int(ghost_anchor[1] + j)
+            if 0 <= x < self.width and 0 <= y < self.height:
+                rect = pygame.Rect(x * self.block_size, y * self.block_size, self.block_size, self.block_size)
+                pygame.draw.rect(self.window, ghost_color, rect, 1)  # Draw only outline for ghost piece
 
     def _render_ui(self, game_state):
 
