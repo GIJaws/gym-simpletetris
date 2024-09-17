@@ -96,24 +96,38 @@ class Renderer:
     def _render_piece_preview(self, pieces, pos, label):
         if pieces:
             preview_size = 80
-            block_size = preview_size // 4
+            block_size = preview_size // 5  # Slightly smaller blocks
+            spacing = 20  # Vertical spacing between pieces
 
             # Draw label
             self._render_text(label, (pos[0], pos[1] - 30))
 
             # Draw background
-            pygame.draw.rect(self.window, (50, 50, 50), (pos[0], pos[1], preview_size, preview_size * len(pieces)))
+            total_height = preview_size * len(pieces) + spacing * (len(pieces) - 1)
+            pygame.draw.rect(self.window, (50, 50, 50), (pos[0], pos[1], preview_size, total_height))
 
             # Draw pieces
             for i, piece in enumerate(pieces):
                 shape = SHAPES[piece]
+                # Calculate bounds of the shape
+                min_x = min(x for x, y in shape)
+                max_x = max(x for x, y in shape)
+                min_y = min(y for x, y in shape)
+                max_y = max(y for x, y in shape)
+                width = max_x - min_x + 1
+                height = max_y - min_y + 1
+
+                # Center the piece
+                offset_x = (preview_size - width * block_size) // 2
+                offset_y = (preview_size - height * block_size) // 2
+
                 for x, y in shape:
                     pygame.draw.rect(
                         self.window,
                         (255, 255, 255),
                         (
-                            pos[0] + (x + 1) * block_size,
-                            pos[1] + (y + 1) * block_size + i * preview_size,
+                            pos[0] + offset_x + (x - min_x) * block_size,
+                            pos[1] + offset_y + (y - min_y) * block_size + i * (preview_size + spacing),
                             block_size - 1,
                             block_size - 1,
                         ),
