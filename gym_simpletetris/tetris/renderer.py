@@ -78,7 +78,7 @@ class Renderer:
         self._render_text(f"FPS: {round(self.clock.get_fps(), 2)}", (x_offset, 100))
 
         # Render held piece
-        self._render_piece_preview(game_state["held_piece_name"], (x_offset, 10), "Held")
+        self._render_piece_preview(game_state["held_piece_name"], (x_offset + 80, 10), "Held")
 
         # Render next piece
         self._render_piece_preview(game_state["next_piece"], (x_offset, 130), "Next")

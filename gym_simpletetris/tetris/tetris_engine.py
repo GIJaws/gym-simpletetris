@@ -193,7 +193,7 @@ class TetrisEngine:
         return self.holes
 
     def get_info(self):
-        return {
+        info = {
             "time": self.time,
             "current_piece": self.shape_name,
             "score": self.score,
@@ -207,6 +207,10 @@ class TetrisEngine:
             "held_piece": self.held_piece,
             "held_piece_name": self.held_piece_name,
         }
+
+        # print(info)
+
+        return info
 
     def _calculate_gravity_interval(self):
         if self.level == 0:
