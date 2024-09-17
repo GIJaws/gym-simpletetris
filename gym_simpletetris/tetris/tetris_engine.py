@@ -1,8 +1,8 @@
 import random
-from typing_extensions import deprecated
 import numpy as np
 from .scoring_system import ScoringSystem
 from .tetris_shapes import SHAPE_NAMES, SHAPES
+import math
 
 
 def rotated(shape, cclk=False):
@@ -13,7 +13,7 @@ def rotated(shape, cclk=False):
 
 
 def is_occupied(shape, anchor, board):
-    for i, j in SHAPES[shape]:
+    for i, j in shape:
         x, y = anchor[0] + i, anchor[1] + j
         if y < 0:
             continue
@@ -147,7 +147,7 @@ class TetrisEngine:
         self.anchor = (self.width / 2, 0)
         self.next_piece = self.piece_queue.next_piece()
         self.shape_counts[self.next_piece] += 1
-        self.shape = self.next_piece
+        self.shape = SHAPES[self.next_piece]
 
     def _has_dropped(self):
         return is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)
@@ -192,18 +192,11 @@ class TetrisEngine:
         }
 
     def _calculate_gravity_interval(self):
-        # Level 0: gravity is effectively disabled, requiring player input for dropping
         if self.level == 0:
-            return float("inf")  # Gravity won't trigger automatically
-
-        # Other levels: use the regular gravity decay formula
-        return max(
-            1,
-            min(
-                60 * (0.8 - ((min(self.level + 9, 29) - 1) * 0.007)) ** min(self.level + 9, 29),
-                60,
-            ),
-        )
+            return float("inf")
+        base_interval = 60  # Starting interval for level 1
+        difficulty_factor = 0.2  # Adjust this to control difficulty progression
+        return max(1, base_interval * math.exp(-difficulty_factor * (self.level - 1)))
 
     def step(self, actions):
         # Action priorities: lower numbers have higher priority
@@ -294,7 +287,7 @@ class TetrisEngine:
         return state
 
     def _set_piece(self, on=False):
-        for i, j in SHAPES[self.shape]:
+        for i, j in self.shape:
             x, y = i + self.anchor[0], j + self.anchor[1]
             if x < self.width and x >= 0 and y < self.height and y >= 0:
                 self.board[int(self.anchor[0] + i), int(self.anchor[1] + j)] = on

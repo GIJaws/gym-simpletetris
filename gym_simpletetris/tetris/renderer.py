@@ -51,7 +51,6 @@ class Renderer:
 
         self.clock.tick(self.render_fps)
 
-        print(self.clock.get_fps())
         return None
 
     def _render_board(self, board):
