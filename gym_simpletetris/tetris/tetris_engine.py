@@ -14,7 +14,8 @@ def rotated(shape, cclk=False):
 
 def is_occupied(shape, anchor, board):
     for i, j in shape:
-        x, y = anchor[0] + i, anchor[1] + j
+        x = anchor[0] + i
+        y = anchor[1] + j
         if x < 0 or x >= board.shape[0] or y >= board.shape[1]:
             return True  # Out of bounds
         if np.any(board[x, y]):
@@ -156,7 +157,7 @@ class TetrisEngine:
 
     def _new_piece(self):
         # Spawn in the middle of the width, at the top of the height area
-        self.anchor = (self.width // 2, self.height + 1)
+        self.anchor = (self.width // 2, self.buffer_height - 1)
         self.shape_name = self.piece_queue.next_piece()
         self.shape_counts[self.shape_name] += 1
         self.shape = SHAPES[self.shape_name]["shape"]
@@ -317,11 +318,8 @@ class TetrisEngine:
         ghost_anchor = self.anchor
         while not is_occupied(self.shape, ghost_anchor, self.board):
             ghost_anchor = (ghost_anchor[0], ghost_anchor[1] + 1)
-
-            # Prevent ghost piece from going beyond the playfield
-            if ghost_anchor[1] >= self.total_height:
-                break
-
+        # Move back up one row to the last valid position
+        ghost_anchor = (ghost_anchor[0], ghost_anchor[1] - 1)
         return ghost_anchor
 
     def render(self):

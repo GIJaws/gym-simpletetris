@@ -63,7 +63,10 @@ class Renderer:
         self.window.fill((0, 0, 0))  # Clear screen with black background
 
         # Render the game board
-        self._render_board(board, shape, ghost_anchor, ghost_color)
+        self._render_board(board)
+
+        # Render ghost piece
+        self._render_piece(shape, ghost_anchor, ghost_color, ghost=True)
 
         # Render UI components
         self._render_ui(game_state)
@@ -74,33 +77,29 @@ class Renderer:
 
         return None  # human render mode should return None
 
-    def _render_board(self, board, shape, ghost_anchor, ghost_color):
-        start_y = self.total_height - self.visible_height
-        for y in range(self.visible_height):
+    def _render_board(self, board):
+        for y in range(self.total_height - self.visible_height, self.total_height):
             for x in range(self.width):
-                # Adjust y-index to account for buffer zone and invert the y-axis
-                color = tuple(board[x][y + start_y])
+                color = tuple(board[x][y])
 
-                self._render_piece(((1, 1),), (x, y), color, start_y, ghost=False)
+                self._render_piece(((0, 0),), (x, y), color, ghost=False)
 
-        # Render ghost piece
-        self._render_piece(shape, ghost_anchor, ghost_color, start_y, ghost=True)
-
-    def _render_piece(self, shape, anchor, color, start_y, ghost=False):
-        start_y = self.total_height - self.visible_height
+    def _render_piece(self, shape, anchor, color, ghost=False):
+        y_offset = self.total_height - self.visible_height
         for i, j in shape:
             x, y = int(anchor[0] + i), int(anchor[1] + j)
-            if 0 <= x < self.width and start_y <= y < self.total_height:
+            if 0 <= x < self.width and 0 <= y < self.total_height:
+                # Invert the Y-axis for rendering
+                y_screen = (self.visible_height - 1 - (y - y_offset)) * self.block_size
                 rect = pygame.Rect(
                     x * self.block_size,
-                    y * self.block_size,
+                    y_screen,
                     self.block_size,
                     self.block_size,
                 )
                 if ghost:
                     pygame.draw.rect(self.window, color, rect, 1)  # Draw only outline for ghost piece
                 else:
-                    # pygame.draw.rect(self.window, color, rect)
                     if any(color):  # If the color is not black
                         pygame.draw.rect(self.window, color, rect)
                     pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
