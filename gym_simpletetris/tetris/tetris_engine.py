@@ -314,7 +314,7 @@ class TetrisEngine:
 
         # Add ghost piece
         ghost_anchor = self.get_ghost_piece_position()
-        ghost_color = tuple(max(0, c - 50) for c in SHAPES[self.shape_name]["color"])  # Slightly darker color
+        ghost_color = tuple(min(255, c + 70) for c in SHAPES[self.shape_name]["color"])  # Lighter color
 
         return state, self.shape, ghost_anchor, ghost_color
 
