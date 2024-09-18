@@ -275,7 +275,7 @@ class TetrisEngine:
                     reward += self.scoring_system.calculate_clear_reward(cleared_lines)
                     self.score += self.scoring_system.calculate_clear_reward(cleared_lines)
 
-                    if np.any(self.board[:, 0]):
+                    if np.any(self.board[:, : self.buffer_height]):
                         self._count_holes()
                         self.n_deaths += 1
                         done = True
@@ -293,6 +293,11 @@ class TetrisEngine:
 
                         self.piece_height = new_height
                         self._new_piece()
+                        if is_occupied(self.shape, self.anchor, self.board):
+                            self.n_deaths += 1
+                            done = True
+                            reward = -100
+                            return state, reward, done
 
         self._set_piece(True)
         state = np.copy(self.board)
