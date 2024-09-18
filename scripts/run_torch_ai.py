@@ -134,7 +134,8 @@ def train_dqn():
             action = select_action(state, policy_net, steps_done, n_actions)
             steps_done += 1
 
-            next_state, reward, terminated, truncated, _ = env.step([action.item()])
+            next_state, reward, terminated, truncated, info = env.step([action.item()])
+            reward = calculate_reward(next_state, info["lines_cleared"], terminated)
             total_reward += reward
             done = terminated or truncated
 
@@ -164,6 +165,41 @@ def train_dqn():
 
     env.close()
     print("Training completed")
+
+
+def calculate_reward(board, lines_cleared, game_over):
+    if game_over:
+        return -100
+
+    # Calculate board height
+    heights = [0] * board.shape[0]
+    for i in range(board.shape[0]):
+        for j in range(board.shape[1]):
+            if np.any(board[i, j] != 0):  # Check if any channel is non-zero
+                heights[i] = board.shape[1] - j
+                break
+
+    max_height = max(heights)
+
+    # Calculate holes
+    holes = 0
+    for i in range(board.shape[0]):
+        holes += len([x for x in range(heights[i]) if not np.any(board[i, board.shape[1] - x - 1] != 0)])
+
+    # Calculate bumpiness
+    bumpiness = sum(abs(heights[i] - heights[i + 1]) for i in range(len(heights) - 1))
+
+    # Calculate reward
+    height_weight = 0.510066
+    hole_weight = 0.35663
+    bumpiness_weight = 0.184483
+
+    reward = (board.shape[1] - max_height) * height_weight
+    reward += -holes * hole_weight
+    reward += -bumpiness * bumpiness_weight
+    reward += lines_cleared**2 * 100
+
+    return reward
 
 
 if __name__ == "__main__":
