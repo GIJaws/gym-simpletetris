@@ -110,6 +110,7 @@ class TetrisEngine:
 
         self.held_piece = None  # No piece is held at the start
         self.held_piece_name = None
+        self.hold_used = False
         self.piece_queue = PieceQueue(preview_size)
         self.shape_counts = dict(zip(SHAPE_NAMES, [0] * len(SHAPES)))
         self.shape = None
@@ -138,6 +139,11 @@ class TetrisEngine:
 
     # TODO make this functional so no side effects can occur to prevent future bugs
     def hold_swap(self, shape, anchor, board):
+        if self.hold_used:
+            # Can't hold/swap again until next piece
+            return self.shape, self.anchor
+
+        self.hold_used = True
 
         # assume that shape, anchor, and board is the same as self
         if self.held_piece is None:
@@ -145,14 +151,13 @@ class TetrisEngine:
             self.held_piece = self.shape
             self.held_piece_name = self.shape_name
             self._new_piece()  # Generate a new piece to replace the held one
+            self.hold_used = True  # So the player can't switch back again
         else:
             # Swap the current piece with the held piece
             self.shape, self.held_piece = self.held_piece, self.shape
-            self.shape_name, self.held_piece_name = (
-                self.held_piece_name,
-                self.shape_name,
-            )
-
+            self.shape_name, self.held_piece_name = self.held_piece_name, self.shape_name
+        # Reset the anchor to the spawn position
+        self.anchor = (self.width // 2, self.buffer_height - 1)
         return self.shape, self.anchor
 
     def _new_piece(self):
@@ -161,6 +166,7 @@ class TetrisEngine:
         self.shape_name = self.piece_queue.next_piece()
         self.shape_counts[self.shape_name] += 1
         self.shape = SHAPES[self.shape_name]["shape"]
+        self.hold_used = False
 
     def _has_dropped(self):
         return is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)

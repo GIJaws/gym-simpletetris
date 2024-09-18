@@ -13,6 +13,7 @@ class HumanInputHandler(InputHandler):
         self.das_delay = 8  # ~13.5ms at 60fps
         self.arr_delay = 3  # ~50 at 60fps
         self.das_timers = {}
+        self.pressed_keys = set()
 
         # Initialize Pygame keys and actions
         self.key_action_map = {
@@ -32,13 +33,17 @@ class HumanInputHandler(InputHandler):
         actions = set()
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN:
-                action = self.key_action_map.get(event.key)
-                if action is not None:
-                    if action == "quit":
-                        return "quit"
-                    actions.add(action)
-                    self.das_timers[event.key] = 0
+                if event.key not in self.pressed_keys:
+                    self.pressed_keys.add(event.key)
+                    action = self.key_action_map.get(event.key)
+                    if action is not None:
+                        if action == "quit":
+                            return "quit"
+                        actions.add(action)
+                        self.das_timers[event.key] = 0
             elif event.type == pygame.KEYUP:
+                if event.key in self.pressed_keys:
+                    self.pressed_keys.remove(event.key)
                 if event.key in self.das_timers:
                     del self.das_timers[event.key]
 
