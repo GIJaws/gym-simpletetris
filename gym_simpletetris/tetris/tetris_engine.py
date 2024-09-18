@@ -139,34 +139,44 @@ class TetrisEngine:
 
     # TODO make this functional so no side effects can occur to prevent future bugs
     def hold_swap(self, shape, anchor, board):
+        # ! assume that shape, anchor, and board is the same as self
+
         if self.hold_used:
-            # Can't hold/swap again until next piece
-            return self.shape, self.anchor
+            return self.shape, self.anchor  # Can't hold/swap again until next piece
 
         self.hold_used = True
 
-        # assume that shape, anchor, and board is the same as self
-        if self.held_piece is None:
-            # If no piece is currently held, hold the current piece
+        if self.held_piece is None:  # If no piece is currently held, hold the current piece
             self.held_piece = self.shape
             self.held_piece_name = self.shape_name
             self._new_piece()  # Generate a new piece to replace the held one
             self.hold_used = True  # So the player can't switch back again
-        else:
-            # Swap the current piece with the held piece
+        else:  # Swap the current piece with the held piece
             self.shape, self.held_piece = self.held_piece, self.shape
             self.shape_name, self.held_piece_name = self.held_piece_name, self.shape_name
+
         # Reset the anchor to the spawn position
-        self.anchor = (self.width // 2, self.buffer_height - 1)
+        self.anchor = self.get_spawn_position(self.shape)
         return self.shape, self.anchor
 
     def _new_piece(self):
         # Spawn in the middle of the width, at the top of the height area
-        self.anchor = (self.width // 2, self.buffer_height - 1)
+        # self.anchor = (self.width // 2, self.buffer_height - 1)
         self.shape_name = self.piece_queue.next_piece()
         self.shape_counts[self.shape_name] += 1
         self.shape = SHAPES[self.shape_name]["shape"]
         self.hold_used = False
+
+        # Use the new spawn position
+        self.anchor = self.get_spawn_position(self.shape)
+
+    def get_spawn_position(self, shape):
+        x_values = [i for i, j in shape]
+        min_x, max_x = min(x_values), max(x_values)
+        piece_width = max_x - min_x + 1
+        spawn_x = (self.width - piece_width) // 2 - min_x
+        spawn_y = self.buffer_height - 1
+        return (spawn_x, spawn_y)
 
     def _has_dropped(self):
         return is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)
@@ -297,7 +307,6 @@ class TetrisEngine:
                             self.n_deaths += 1
                             done = True
                             reward = -100
-                            return state, reward, done
 
         self._set_piece(True)
         state = np.copy(self.board)
