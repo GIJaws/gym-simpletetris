@@ -52,9 +52,9 @@ class TetrisEnv(gym.Env):
     def _get_observation_space(self):
         if self.obs_type == "ram":
             shape = (
-                (self.renderer.width, self.renderer.height, 3)
+                (self.renderer.width, self.renderer.visible_height, 3)
                 if self.extend_dims
-                else (self.renderer.width, self.renderer.height, 3)
+                else (self.renderer.width, self.renderer.visible_height, 3)
             )
         elif self.obs_type in ["grayscale", "rgb"]:
             shape = (84, 84, 1) if self.obs_type == "grayscale" and self.extend_dims else (84, 84, 3)

@@ -16,9 +16,11 @@ def is_occupied(shape, anchor, board):
     for i, j in shape:
         x, y = anchor[0] + i, anchor[1] + j
         if y < 0:
-            continue
-        if x < 0 or x >= board.shape[0] or y >= board.shape[1] or np.any(board[x, y]):
-            return True
+            continue  # Positions above the visible playfield are allowed
+        if x < 0 or x >= board.shape[0] or y >= board.shape[1]:
+            return True  # Out of bounds
+        if np.any(board[x, y]):
+            return True  # Position already occupied
     return False
 
 
@@ -77,8 +79,12 @@ class TetrisEngine:
         preview_size=4,
     ):
         self.width = width
-        self.height = height
-        self.board = np.zeros(shape=(width, height, 3), dtype=np.uint8)
+        self.visible_height = height
+        self.buffer_height = height  # 20 buffer rows
+        self.total_height = self.visible_height + self.buffer_height
+        # Initialize the board with buffer zone at the bottom
+        self.board = np.zeros(shape=(width, self.total_height, 3), dtype=np.uint8)
+
         self.scoring_system = ScoringSystem(
             reward_step,
             penalise_height,
@@ -151,7 +157,8 @@ class TetrisEngine:
         return self.shape, self.anchor
 
     def _new_piece(self):
-        self.anchor = (self.width // 2, 0)
+        # Spawn in the middle of the width, at the top of the visible area
+        self.anchor = (self.width // 2, self.buffer_height)
         self.shape_name = self.piece_queue.next_piece()
         self.shape_counts[self.shape_name] += 1
         self.shape = SHAPES[self.shape_name]["shape"]
@@ -161,17 +168,20 @@ class TetrisEngine:
 
     def _clear_lines(self):
         # Check if each row can be cleared (all blocks have non-zero values)
-        can_clear = [np.all(np.sum(self.board[:, i], axis=1) > 0) for i in range(self.height)]
+        can_clear = [np.all(np.sum(self.board[:, i], axis=1) > 0) for i in range(self.visible_height)]
 
         # Create a new board
         new_board = np.zeros_like(self.board)
 
         # Fill the new board from bottom to top, skipping cleared lines
-        j = self.height - 1
-        for i in range(self.height - 1, -1, -1):
+        j = self.visible_height - 1
+        for i in range(self.visible_height - 1, -1, -1):
             if not can_clear[i]:
                 new_board[:, j] = self.board[:, i]
                 j -= 1
+
+        # Copy the buffer zone as-is
+        new_board[:, : self.visible_height] = self.board[:, : self.visible_height]
 
         # Count the number of cleared lines
         cleared_lines = sum(can_clear)
@@ -249,7 +259,10 @@ class TetrisEngine:
             self.shape, new_anchor = soft_drop(self.shape, self.anchor, self.board)
             if self._step_reset and (self.anchor != new_anchor):
                 self._lock_delay = 0
+
             self.anchor = new_anchor
+            # if new_anchor[1] < self.visible_height:  # Ensure we don't drop into the buffer zone
+            #     self.anchor = new_anchor
 
             if self._has_dropped():
                 self._lock_delay = self._lock_delay_fn(self._lock_delay)
@@ -305,6 +318,10 @@ class TetrisEngine:
         ghost_anchor = list(self.anchor)
         while not is_occupied(self.shape, (ghost_anchor[0], ghost_anchor[1] + 1), self.board):
             ghost_anchor[1] += 1
+
+            # Prevent ghost piece from going beyond the playfield
+            if ghost_anchor[1] >= self.total_height:
+                break
         return ghost_anchor
 
     def render(self):
@@ -323,7 +340,7 @@ class TetrisEngine:
             color = SHAPES[self.shape_name]["color"] if on else (0, 0, 0)
             for i, j in self.shape:
                 x, y = int(self.anchor[0] + i), int(self.anchor[1] + j)
-                if 0 <= x < self.width and 0 <= y < self.height:
+                if 0 <= x < self.width and 0 <= y < self.total_height:
                     self.board[x, y] = color
 
     def __repr__(self):

@@ -7,11 +7,12 @@ from gym_simpletetris.tetris.tetris_shapes import SHAPES
 class Renderer:
     def __init__(self, width, height, render_mode, render_fps, window_size=512):
         self.width = width
-        self.height = height
+        self.visible_height = height
+        self.buffer_height = height
         self.render_mode = render_mode
         self.render_fps = render_fps
         self.window_size = window_size
-        self.block_size = self.window_size // max(self.width, self.height)
+        self.block_size = self.window_size // max(self.width, self.visible_height)
         self.window = None
         self.clock = None
         self.font = None
@@ -59,10 +60,13 @@ class Renderer:
         return None  # human render mode should return None
 
     def _render_board(self, board, shape, ghost_anchor, ghost_color):
-        for y in range(self.height):
+        for y in range(self.visible_height):
             for x in range(self.width):
                 rect = pygame.Rect(x * self.block_size, y * self.block_size, self.block_size, self.block_size)
-                color = tuple(board[x][y])
+
+                # Adjust y-index to account for buffer zone
+                color = tuple(board[x][y + self.buffer_height])
+
                 if any(color):  # If the color is not black
                     pygame.draw.rect(self.window, color, rect)
                 pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
@@ -70,7 +74,7 @@ class Renderer:
         # Render ghost piece
         for i, j in shape:
             x, y = int(ghost_anchor[0] + i), int(ghost_anchor[1] + j)
-            if 0 <= x < self.width and 0 <= y < self.height:
+            if 0 <= x < self.width and 0 <= y < self.visible_height:
                 rect = pygame.Rect(x * self.block_size, y * self.block_size, self.block_size, self.block_size)
                 pygame.draw.rect(self.window, ghost_color, rect, 1)  # Draw only outline for ghost piece
 
