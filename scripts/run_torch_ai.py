@@ -28,14 +28,13 @@ NUM_EPISODES = 10000
 class DQN(nn.Module):
     def __init__(self, h, w, outputs):
         super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)  # Assuming 3 channels
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
         self.fc_input_dim = 64 * h * w
         self.fc1 = nn.Linear(self.fc_input_dim, 512)
         self.fc2 = nn.Linear(512, outputs)
 
     def forward(self, x):
-        x = x / 255.0  # Normalize input
         x = torch.relu(self.conv1(x))
         x = torch.relu(self.conv2(x))
         x = x.view(-1, self.fc_input_dim)
@@ -107,10 +106,13 @@ def train_dqn():
     env = gym.make("SimpleTetris-v0", render_mode="human")  # Set render_mode to 'human' to visualize
     n_actions = env.action_space.n
 
-    init_screen, _ = env.reset()
-    print(f"init_screen.shape: {init_screen.shape}")  # For debugging
+    initial_state, _ = env.reset()
+    state = simplify_board(initial_state)
+    h, w = state.shape
+    state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
 
-    w, h, _ = init_screen.shape  # Corrected dimension assignment
+    print(f"Initial state shape: {initial_state.shape}")
+    print(f"Simplified state shape: {state.shape}")
     print(f"Width: {w}, Height: {h}")
 
     policy_net = DQN(h, w, n_actions).to(device)
@@ -124,9 +126,9 @@ def train_dqn():
     steps_done = 0
 
     for episode in range(NUM_EPISODES):
-        state, _ = env.reset()
-        # Correct the transpose to match the expected dimensions
-        state = torch.tensor(state.transpose((2, 1, 0)), dtype=torch.float32, device=device).unsqueeze(0)
+        initial_state, _ = env.reset()
+        state = simplify_board(initial_state)
+        state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
         total_reward = 0
         done = False
 
@@ -134,21 +136,18 @@ def train_dqn():
             action = select_action(state, policy_net, steps_done, n_actions)
             steps_done += 1
 
-            next_state, reward, terminated, truncated, info = env.step([action.item()])
-            reward = calculate_reward(next_state, info["lines_cleared"], terminated)
+            next_state, _, terminated, truncated, info = env.step([action.item()])
+            next_state = simplify_board(next_state)
+            next_state_tensor = torch.tensor(next_state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
+
+            reward = calculate_reward(next_state_tensor, info["lines_cleared"], terminated)
             total_reward += reward
             done = terminated or truncated
 
-            reward = torch.tensor([reward], device=device, dtype=torch.float32)
-            if not done:
-                next_state_tensor = torch.tensor(
-                    next_state.transpose((2, 1, 0)), dtype=torch.float32, device=device
-                ).unsqueeze(0)
-            else:
-                next_state_tensor = torch.zeros_like(state, device=device)
+            reward_tensor = torch.tensor([reward], device=device, dtype=torch.float32)
 
             # Store the transition in memory
-            memory.push(state, action, reward, next_state_tensor, torch.tensor([done], device=device))
+            memory.push(state, action, reward_tensor, next_state_tensor, torch.tensor([done], device=device))
 
             state = next_state_tensor
 
@@ -171,11 +170,15 @@ def calculate_reward(board, lines_cleared, game_over):
     if game_over:
         return -100
 
+    # Convert board to NumPy if it's a PyTorch tensor
+    if isinstance(board, torch.Tensor):
+        board = board.squeeze().cpu().numpy()
+
     # Calculate board height
     heights = [0] * board.shape[0]
     for i in range(board.shape[0]):
         for j in range(board.shape[1]):
-            if np.any(board[i, j] != 0):  # Check if any channel is non-zero
+            if board[i, j] != 0:
                 heights[i] = board.shape[1] - j
                 break
 
@@ -184,7 +187,7 @@ def calculate_reward(board, lines_cleared, game_over):
     # Calculate holes
     holes = 0
     for i in range(board.shape[0]):
-        holes += len([x for x in range(heights[i]) if not np.any(board[i, board.shape[1] - x - 1] != 0)])
+        holes += len([x for x in range(heights[i]) if board[i, board.shape[1] - x - 1] == 0])
 
     # Calculate bumpiness
     bumpiness = sum(abs(heights[i] - heights[i + 1]) for i in range(len(heights) - 1))
@@ -200,6 +203,10 @@ def calculate_reward(board, lines_cleared, game_over):
     reward += lines_cleared**2 * 100
 
     return reward
+
+
+def simplify_board(board):
+    return np.any(board != 0, axis=2).astype(np.float32)
 
 
 if __name__ == "__main__":
