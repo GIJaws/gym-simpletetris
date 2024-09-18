@@ -82,7 +82,8 @@ class TetrisEnv(gym.Env):
 
     def _get_observation(self, state):
         if self.obs_type == "ram":
-            obs = state
+            # Extract only the visible part of the state
+            obs = state[:, -self.renderer.visible_height :, :]  # Crop to visible height
         elif self.obs_type in ["grayscale", "rgb"]:
             obs = self.renderer.render_rgb_array(state)
             if self.obs_type == "grayscale":
