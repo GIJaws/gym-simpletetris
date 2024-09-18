@@ -5,10 +5,24 @@ from gym_simpletetris.tetris.tetris_shapes import SHAPES
 
 
 class Renderer:
-    def __init__(self, width, height, render_mode, render_fps, window_size=512):
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        buffer_height: int,
+        visible_height: int,
+        render_mode: str,
+        render_fps,
+        window_size: int,
+    ):
         self.width = width
-        self.visible_height = height
-        self.buffer_height = height
+        self.buffer_height = buffer_height
+        self.height = height
+        self.total_height = self.height + self.buffer_height
+        self.visible_height = visible_height or self.height
+
+        if self.visible_height > self.total_height:
+            raise ValueError(f"{self.visible_height=} is greater then the {self.total_height=}")
         self.render_mode = render_mode
         self.render_fps = render_fps
         self.window_size = window_size
@@ -29,7 +43,8 @@ class Renderer:
         if self.render_mode == "rgb_array":
             return self.render_rgb_array(board)
         elif self.render_mode == "human":
-            # TODO THIS SHOULD NEVER GET CALLED WHAT DO???
+            # TODO THIS SHOULD NEVER GET CALLED IF RENDER IS CALLED AS HUMAN MODE MEANS
+            #  TODO THAT THE ENVIRONMENT WILL CALL render_human itself and not calling render()
             return self.render_human(board, game_state, shape, ghost_anchor, ghost_color)
 
     def render_rgb_array(self, board):
@@ -60,23 +75,35 @@ class Renderer:
         return None  # human render mode should return None
 
     def _render_board(self, board, shape, ghost_anchor, ghost_color):
+        start_y = self.total_height - self.visible_height
         for y in range(self.visible_height):
             for x in range(self.width):
-                rect = pygame.Rect(x * self.block_size, y * self.block_size, self.block_size, self.block_size)
+                # Adjust y-index to account for buffer zone and invert the y-axis
+                color = tuple(board[x][y + start_y])
 
-                # Adjust y-index to account for buffer zone
-                color = tuple(board[x][y + self.buffer_height])
-
-                if any(color):  # If the color is not black
-                    pygame.draw.rect(self.window, color, rect)
-                pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
+                self._render_piece(((1, 1),), (x, y), color, start_y, ghost=False)
 
         # Render ghost piece
+        self._render_piece(shape, ghost_anchor, ghost_color, start_y, ghost=True)
+
+    def _render_piece(self, shape, anchor, color, start_y, ghost=False):
+        start_y = self.total_height - self.visible_height
         for i, j in shape:
-            x, y = int(ghost_anchor[0] + i), int(ghost_anchor[1] + j)
-            if 0 <= x < self.width and 0 <= y < self.visible_height:
-                rect = pygame.Rect(x * self.block_size, y * self.block_size, self.block_size, self.block_size)
-                pygame.draw.rect(self.window, ghost_color, rect, 1)  # Draw only outline for ghost piece
+            x, y = int(anchor[0] + i), int(anchor[1] + j)
+            if 0 <= x < self.width and start_y <= y < self.total_height:
+                rect = pygame.Rect(
+                    x * self.block_size,
+                    y * self.block_size,
+                    self.block_size,
+                    self.block_size,
+                )
+                if ghost:
+                    pygame.draw.rect(self.window, color, rect, 1)  # Draw only outline for ghost piece
+                else:
+                    # pygame.draw.rect(self.window, color, rect)
+                    if any(color):  # If the color is not black
+                        pygame.draw.rect(self.window, color, rect)
+                    pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
 
     def _render_ui(self, game_state):
 

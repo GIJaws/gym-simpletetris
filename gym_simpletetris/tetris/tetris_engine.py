@@ -15,8 +15,6 @@ def rotated(shape, cclk=False):
 def is_occupied(shape, anchor, board):
     for i, j in shape:
         x, y = anchor[0] + i, anchor[1] + j
-        if y < 0:
-            continue  # Positions above the visible playfield are allowed
         if x < 0 or x >= board.shape[0] or y >= board.shape[1]:
             return True  # Out of bounds
         if np.any(board[x, y]):
@@ -31,6 +29,7 @@ def left(shape, anchor, board):
 
 def right(shape, anchor, board):
     new_anchor = (anchor[0] + 1, anchor[1])
+
     return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
 
 
@@ -40,11 +39,9 @@ def soft_drop(shape, anchor, board):
 
 
 def hard_drop(shape, anchor, board):
-    while True:
-        _, anchor_new = soft_drop(shape, anchor, board)
-        if anchor_new == anchor:
-            return shape, anchor_new
-        anchor = anchor_new
+    while not is_occupied(shape, (anchor[0], anchor[1] + 1), board):
+        anchor = (anchor[0], anchor[1] + 1)
+    return shape, anchor
 
 
 def rotate_left(shape, anchor, board):
@@ -66,6 +63,7 @@ class TetrisEngine:
         self,
         width,
         height,
+        buffer_height,
         lock_delay=0,
         step_reset=False,
         reward_step=False,
@@ -79,9 +77,9 @@ class TetrisEngine:
         preview_size=4,
     ):
         self.width = width
-        self.visible_height = height
-        self.buffer_height = height  # 20 buffer rows
-        self.total_height = self.visible_height + self.buffer_height
+        self.height = height
+        self.buffer_height = buffer_height
+        self.total_height = self.height + self.buffer_height
         # Initialize the board with buffer zone at the bottom
         self.board = np.zeros(shape=(width, self.total_height, 3), dtype=np.uint8)
 
@@ -157,8 +155,8 @@ class TetrisEngine:
         return self.shape, self.anchor
 
     def _new_piece(self):
-        # Spawn in the middle of the width, at the top of the visible area
-        self.anchor = (self.width // 2, self.buffer_height)
+        # Spawn in the middle of the width, at the top of the height area
+        self.anchor = (self.width // 2, self.height + 1)
         self.shape_name = self.piece_queue.next_piece()
         self.shape_counts[self.shape_name] += 1
         self.shape = SHAPES[self.shape_name]["shape"]
@@ -168,20 +166,21 @@ class TetrisEngine:
 
     def _clear_lines(self):
         # Check if each row can be cleared (all blocks have non-zero values)
-        can_clear = [np.all(np.sum(self.board[:, i], axis=1) > 0) for i in range(self.visible_height)]
+        can_clear = [np.all(np.sum(self.board[:, i], axis=1) > 0) for i in range(self.height)]
 
         # Create a new board
         new_board = np.zeros_like(self.board)
 
         # Fill the new board from bottom to top, skipping cleared lines
-        j = self.visible_height - 1
-        for i in range(self.visible_height - 1, -1, -1):
+        j = self.height - 1
+        for i in range(self.height - 1, -1, -1):  # TODO IS THIS CORRECT????
+
             if not can_clear[i]:
                 new_board[:, j] = self.board[:, i]
                 j -= 1
 
         # Copy the buffer zone as-is
-        new_board[:, : self.visible_height] = self.board[:, : self.visible_height]
+        new_board[:, : self.height] = self.board[:, : self.height]  # TODO IS THIS EVEN NEEDED
 
         # Count the number of cleared lines
         cleared_lines = sum(can_clear)
@@ -315,13 +314,14 @@ class TetrisEngine:
         return self.board
 
     def get_ghost_piece_position(self):
-        ghost_anchor = list(self.anchor)
-        while not is_occupied(self.shape, (ghost_anchor[0], ghost_anchor[1] + 1), self.board):
-            ghost_anchor[1] += 1
+        ghost_anchor = self.anchor
+        while not is_occupied(self.shape, ghost_anchor, self.board):
+            ghost_anchor = (ghost_anchor[0], ghost_anchor[1] + 1)
 
             # Prevent ghost piece from going beyond the playfield
             if ghost_anchor[1] >= self.total_height:
                 break
+
         return ghost_anchor
 
     def render(self):
@@ -331,6 +331,9 @@ class TetrisEngine:
 
         # Add ghost piece
         ghost_anchor = self.get_ghost_piece_position()
+
+        # print(f"{ghost_anchor=}, {self.anchor=}")
+
         ghost_color = tuple(min(255, c + 70) for c in SHAPES[self.shape_name]["color"])  # Lighter color
 
         return state, self.shape, ghost_anchor, ghost_color
@@ -340,6 +343,7 @@ class TetrisEngine:
             color = SHAPES[self.shape_name]["color"] if on else (0, 0, 0)
             for i, j in self.shape:
                 x, y = int(self.anchor[0] + i), int(self.anchor[1] + j)
+                # TODO should the '0' in `0 <= y < self.total_height` be self.buffer_height??????
                 if 0 <= x < self.width and 0 <= y < self.total_height:
                     self.board[x, y] = color
 

@@ -3,6 +3,7 @@ import gymnasium as gym
 from gymnasium import spaces
 from .tetris_engine import TetrisEngine
 from .renderer import Renderer
+from gym_simpletetris.tetris.tetris_shapes import WIDTH, HEIGHT, BUFFER_HEIGHT, VISIBLE_HEIGHT
 
 
 class TetrisEnv(gym.Env):
@@ -10,8 +11,10 @@ class TetrisEnv(gym.Env):
 
     def __init__(
         self,
-        width=10,
-        height=20,
+        width=WIDTH,
+        height=HEIGHT,
+        buffer_height=BUFFER_HEIGHT,
+        visible_height=VISIBLE_HEIGHT,
         obs_type="ram",
         extend_dims=False,
         render_mode="rgb_array",
@@ -30,10 +33,13 @@ class TetrisEnv(gym.Env):
         self.obs_type = obs_type
         self.extend_dims = extend_dims
 
-        self.renderer = Renderer(width, height, render_mode, self.metadata["render_fps"], window_size=window_size)
+        self.renderer = Renderer(
+            width, height, buffer_height, visible_height, render_mode, self.metadata["render_fps"], window_size
+        )
         self.engine = TetrisEngine(
             width,
             height,
+            buffer_height,
             lock_delay,
             step_reset,
             reward_step,
