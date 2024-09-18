@@ -90,7 +90,7 @@ class Renderer:
             x, y = int(anchor[0] + i), int(anchor[1] + j)
             if 0 <= x < self.width and 0 <= y < self.total_height:
                 # Invert the Y-axis for rendering
-                y_screen = (self.visible_height - 1 - (y - y_offset)) * self.block_size
+                y_screen = ((y - y_offset)) * self.block_size
                 rect = pygame.Rect(
                     x * self.block_size,
                     y_screen,
