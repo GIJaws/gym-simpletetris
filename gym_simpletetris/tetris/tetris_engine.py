@@ -166,35 +166,32 @@ class TetrisEngine:
         return is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)
 
     def _clear_lines(self):
-        # Check if each row can be cleared (all blocks have non-zero values)
-        can_clear = [np.all(np.sum(self.board[:, i], axis=1) > 0) for i in range(self.height)]
+        # Check each row from top to bottom
+        non_zero_cells = np.any(self.board != 0, axis=2)  # Shape: (width, total_height)
+        can_clear = np.all(non_zero_cells, axis=0)  # Shape: (total_height,)
 
-        # Create a new board
-        new_board = np.zeros_like(self.board)
+        # Rows to keep (not full)
+        rows_to_keep = [y for y in range(self.total_height) if not can_clear[y]]
 
-        # Fill the new board from bottom to top, skipping cleared lines
-        j = self.height - 1
-        for i in range(self.height - 1, -1, -1):  # TODO IS THIS CORRECT????
-
-            if not can_clear[i]:
-                new_board[:, j] = self.board[:, i]
-                j -= 1
-
-        # Copy the buffer zone as-is
-        new_board[:, : self.height] = self.board[:, : self.height]  # TODO IS THIS EVEN NEEDED
-
-        # Count the number of cleared lines
-        cleared_lines = sum(can_clear)
+        # Count cleared lines
+        cleared_lines = np.sum(can_clear)
         self.lines_cleared += cleared_lines
 
-        # Update the board
+        # Create new board with cleared lines removed
+        new_board = np.zeros_like(self.board)
+        j = self.total_height - 1  # Index in new_board
+
+        for y in reversed(rows_to_keep):
+            new_board[:, j, :] = self.board[:, y, :]
+            j -= 1
+
         self.board = new_board
 
-        # Update level if enough lines have been cleared
+        # Update level and gravity if needed
         if self.lines_cleared >= self.lines_for_next_level:
             self.level += 1
-            self.lines_for_next_level += 10  # Increase the threshold for the next level
-            self.gravity_interval = self._calculate_gravity_interval()  # Recalculate gravity
+            self.lines_for_next_level += 10
+            self.gravity_interval = self._calculate_gravity_interval()
 
         return cleared_lines
 
@@ -261,8 +258,6 @@ class TetrisEngine:
                 self._lock_delay = 0
 
             self.anchor = new_anchor
-            # if new_anchor[1] < self.visible_height:  # Ensure we don't drop into the buffer zone
-            #     self.anchor = new_anchor
 
             if self._has_dropped():
                 self._lock_delay = self._lock_delay_fn(self._lock_delay)

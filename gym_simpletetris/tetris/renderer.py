@@ -85,12 +85,10 @@ class Renderer:
                 self._render_piece(((0, 0),), (x, y), color, ghost=False)
 
     def _render_piece(self, shape, anchor, color, ghost=False):
-        y_offset = self.total_height - self.visible_height
         for i, j in shape:
             x, y = int(anchor[0] + i), int(anchor[1] + j)
             if 0 <= x < self.width and 0 <= y < self.total_height:
-                # Invert the Y-axis for rendering
-                y_screen = ((y - y_offset)) * self.block_size
+                y_screen = (y - self.total_height + self.visible_height) * self.block_size
                 rect = pygame.Rect(
                     x * self.block_size,
                     y_screen,
