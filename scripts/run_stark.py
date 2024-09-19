@@ -87,6 +87,7 @@ class TonyStarkDQN(nn.Module):
         )
 
     def forward(self, x):
+        print("Input to ViT shape:", x.shape)
         x = self.vit(x)
         x = x.unsqueeze(0)
         x = self.transformer_encoder(x)
@@ -149,7 +150,9 @@ def select_action(state, policy_net, steps_done, n_actions):
     eps_threshold = EPS_END + (EPS_START - EPS_END) * np.exp(-1.0 * steps_done / EPS_DECAY)
     if sample > eps_threshold:
         with torch.no_grad():
-            return policy_net(state).max(1)[1].view(1, 1)
+            # Remove batch dimension for single state
+            q_values = policy_net(state)
+            return q_values.max(1)[1].view(1, 1)
     else:
         return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
 
@@ -160,24 +163,33 @@ def optimize_model(memory, policy_net, target_net, optimizer):
     transitions, indices, weights = memory.sample(BATCH_SIZE)
     batch = list(zip(*transitions))
 
-    state_batch = torch.stack(batch[0])
-    action_batch = torch.cat(batch[1])
-    reward_batch = torch.stack(batch[2])
-    next_state_batch = torch.stack(batch[3])
-    done_batch = torch.cat(batch[4])
+    # Concatenate states and next_states along the batch dimension
+    state_batch = torch.cat(batch[0], dim=0)
+    next_state_batch = torch.cat(batch[3], dim=0)
+    print("state_batch.shape:", state_batch.shape)  # Should be (batch_size, 3, 224, 224)
 
+    # Concatenate other tensors appropriately
+    action_batch = torch.cat(batch[1], dim=0)  # Shape: (batch_size, 1)
+    reward_batch = torch.stack(batch[2])  # Shape: (batch_size)
+    done_batch = torch.cat(batch[4], dim=0)  # Shape: (batch_size)
+
+    # Compute Q values
     state_action_values = policy_net(state_batch).gather(1, action_batch)
 
+    # Compute next state values
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
     with torch.no_grad():
         next_state_values[~done_batch] = target_net(next_state_batch[~done_batch]).max(1)[0]
 
+    # Compute expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
-    loss = (state_action_values - expected_state_action_values.unsqueeze(1)).pow(2) * weights.unsqueeze(1)
+    # Compute loss
+    loss = (state_action_values.squeeze() - expected_state_action_values).pow(2) * weights
     prios = loss + 1e-5
     loss = loss.mean()
 
+    # Optimize the model
     optimizer.zero_grad()
     loss.backward()
     torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 100)
@@ -195,8 +207,9 @@ def train_dqn():
     h, w = state.shape
 
     # Correct the tensor shape for ViT input
-    state = torch.tensor(state, dtype=torch.float32, device=device).repeat(3, 1, 1)
-    state = F.interpolate(state.unsqueeze(0), size=(224, 224), mode="bilinear", align_corners=False)
+    state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(1)
+    state = state.repeat(1, 3, 1, 1)
+    state = F.interpolate(state, size=(224, 224), mode="bilinear", align_corners=False)
 
     policy_net = TonyStarkDQN(224, 224, n_actions).to(device)
     target_net = TonyStarkDQN(224, 224, n_actions).to(device)
@@ -213,7 +226,10 @@ def train_dqn():
         states = [env.reset()[0] for env in envs]
         states = [
             F.interpolate(
-                torch.tensor(simplify_board(state), dtype=torch.float32, device=device).repeat(3, 1, 1).unsqueeze(0),
+                torch.tensor(simplify_board(state), dtype=torch.float32, device=device)
+                .unsqueeze(0)  # Add batch dimension
+                .unsqueeze(1)  # Add channel dimension
+                .repeat(1, 3, 1, 1),  # Repeat channels to simulate RGB
                 size=(224, 224),
                 mode="bilinear",
                 align_corners=False,
@@ -238,8 +254,9 @@ def train_dqn():
             next_states = [
                 F.interpolate(
                     torch.tensor(simplify_board(state), dtype=torch.float32, device=device)
-                    .repeat(3, 1, 1)
-                    .unsqueeze(0),
+                    .unsqueeze(0)
+                    .unsqueeze(1)
+                    .repeat(1, 3, 1, 1),
                     size=(224, 224),
                     mode="bilinear",
                     align_corners=False,
