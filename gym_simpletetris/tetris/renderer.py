@@ -174,11 +174,11 @@ class Renderer:
         gap_size = max(1, block_size // 10)  # Adjust gap size relative to block size
 
         # Calculate total width and height of the game area
-        inner_width = (block_size + gap_size) * shape[0] + (gap_size)
-        inner_height = (block_size + gap_size) * shape[1] + (gap_size)
+        inner_width = (block_size + gap_size) * shape[0] + gap_size
+        inner_height = (block_size + gap_size) * shape[1] + gap_size
 
         # Calculate padding to center the board
-        padding_width = (size - inner_width) // 2
+        padding_width = size - inner_width
         padding_height = size - inner_height
 
         # Create result array with dark background
@@ -188,7 +188,6 @@ class Renderer:
             for j in range(shape[1]):
                 x_start = padding_width + (i * (block_size + gap_size))
                 y_start = padding_height + (j * (block_size + gap_size))
-
                 if np.any(arr[i, j]):
                     # Filled blocks
                     result[y_start : y_start + block_size, x_start : x_start + block_size] = arr[i, j]
@@ -196,10 +195,6 @@ class Renderer:
                     # Empty blocks - set to a slightly lighter gray
                     result[y_start : y_start + block_size, x_start : x_start + block_size] = 50
 
-        # foo = np.any(result != 0, axis=2)
-        # print(str(foo))
-        # print(foo.shape)
-        # print(result.shape)
         return result
 
     def close(self):
