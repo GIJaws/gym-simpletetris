@@ -16,7 +16,7 @@ setup(
         "Bug Tracker": "https://github.com/GIJaws/gym-simpletetris/issues",
     },
     install_requires=[
-        "numpy>=2.1.1",
+        "numpy==1.26.4",
         "pygame>=2.6.0",
         "gymnasium>=0.29.1",
     ],

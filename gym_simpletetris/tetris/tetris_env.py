@@ -28,7 +28,7 @@ class TetrisEnv(gym.Env):
         penalise_holes_increase=False,
         lock_delay=0,
         step_reset=False,
-        initial_level=1,
+        initial_level=10,
     ):
         self.obs_type = obs_type
         self.extend_dims = extend_dims
@@ -51,6 +51,8 @@ class TetrisEnv(gym.Env):
             penalise_holes_increase,
             initial_level,
         )
+
+        self.render_mode = self.renderer.render_mode
 
         self.action_space = spaces.Discrete(7)
         self.observation_space = self._get_observation_space()

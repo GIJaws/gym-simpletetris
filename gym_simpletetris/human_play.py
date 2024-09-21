@@ -73,7 +73,7 @@ def play_tetris(render_mode="human", record_actions=False):
         )
 
         # Print the current reward to the console
-        print(f"Reward: {current_reward}, Lines Cleared: {info['lines_cleared']}")
+        # print(f"Reward: {current_reward}, Lines Cleared: {info['lines_cleared']}")
 
         # Update last_observation for the next iteration
         last_observation = np.copy(observation)

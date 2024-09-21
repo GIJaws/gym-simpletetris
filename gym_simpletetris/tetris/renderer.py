@@ -41,7 +41,7 @@ class Renderer:
 
     def render(self, board, game_state, shape, ghost_anchor, ghost_color):
         if self.render_mode == "rgb_array":
-            return self.render_rgb_array(board)
+            return np.flipud(np.rot90(self.render_rgb_array(board)))
         elif self.render_mode == "human":
             # TODO THIS SHOULD NEVER GET CALLED IF RENDER IS CALLED AS HUMAN MODE MEANS
             #  TODO THAT THE ENVIRONMENT WILL CALL render_human itself and not calling render()
@@ -179,14 +179,22 @@ class Renderer:
         padding_width = (size - inner_width) // 2
         padding_height = (size - inner_height) // 2
 
-        result = np.zeros((size, size, 3), dtype=np.uint8)
+        # Change background color to dark gray instead of black
+        result = np.full((size, size, 3), 30, dtype=np.uint8)  # Dark gray background
 
         for i in range(shape[0]):
             for j in range(shape[1]):
+                x_start = padding_width + gap_size + i * (block_size + gap_size)
+                y_start = padding_height + gap_size + j * (block_size + gap_size)
+
                 if np.any(arr[i, j]):
-                    x_start = padding_width + gap_size + i * (block_size + gap_size)
-                    y_start = padding_height + gap_size + j * (block_size + gap_size)
+                    # Filled blocks
                     result[y_start : y_start + block_size, x_start : x_start + block_size] = arr[i, j]
+                else:
+                    # Empty blocks - draw a slightly lighter gray rectangle
+                    cv2.rectangle(
+                        result, (x_start, y_start), (x_start + block_size, y_start + block_size), (50, 50, 50), 1
+                    )  # Light gray outline
 
         return result
 
