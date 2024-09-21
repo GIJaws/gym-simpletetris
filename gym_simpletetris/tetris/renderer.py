@@ -41,14 +41,14 @@ class Renderer:
 
     def render(self, board, game_state, shape, ghost_anchor, ghost_color):
         if self.render_mode == "rgb_array":
-            return np.flipud(np.rot90(self.render_rgb_array(board)))
+            return self.render_rgb_array(board)
         elif self.render_mode == "human":
             # TODO THIS SHOULD NEVER GET CALLED IF RENDER IS CALLED AS HUMAN MODE MEANS
             #  TODO THAT THE ENVIRONMENT WILL CALL render_human itself and not calling render()
             return self.render_human(board, game_state, shape, ghost_anchor, ghost_color)
 
     def render_rgb_array(self, board):
-        return self._convert_grayscale(board, 160)
+        return self._convert_grayscale(board, 640)
 
     def _convert_grayscale_rgb(self, array):
         shape = array.shape
@@ -164,38 +164,42 @@ class Renderer:
                     )
 
     def _convert_grayscale(self, board, size):
+        # breakpoint()
         arr = np.array(board, dtype=np.uint8)
-        arr = np.transpose(arr, (1, 0, 2))  # Transpose to match the expected shape
 
         shape = arr.shape[:2]
-        limiting_dim = max(shape)
 
-        gap_size = (size // 100) + 1
-        block_size = ((size - (2 * gap_size)) // limiting_dim) - gap_size
+        # Calculate block size based on the larger dimension to ensure everything fits
+        block_size = min(size // shape[0], size // shape[1])
+        gap_size = max(1, block_size // 10)  # Adjust gap size relative to block size
 
-        inner_width = gap_size + (block_size + gap_size) * shape[0]
-        inner_height = gap_size + (block_size + gap_size) * shape[1]
+        # Calculate total width and height of the game area
+        inner_width = (block_size + gap_size) * shape[0] + (gap_size)
+        inner_height = (block_size + gap_size) * shape[1] + (gap_size)
 
+        # Calculate padding to center the board
         padding_width = (size - inner_width) // 2
-        padding_height = (size - inner_height) // 2
+        padding_height = size - inner_height
 
-        # Change background color to dark gray instead of black
-        result = np.full((size, size, 3), 30, dtype=np.uint8)  # Dark gray background
+        # Create result array with dark background
+        result = np.full((size, size, 3), 30, dtype=np.uint8)
 
         for i in range(shape[0]):
             for j in range(shape[1]):
-                x_start = padding_width + gap_size + i * (block_size + gap_size)
-                y_start = padding_height + gap_size + j * (block_size + gap_size)
+                x_start = padding_width + (i * (block_size + gap_size))
+                y_start = padding_height + (j * (block_size + gap_size))
 
                 if np.any(arr[i, j]):
                     # Filled blocks
                     result[y_start : y_start + block_size, x_start : x_start + block_size] = arr[i, j]
                 else:
-                    # Empty blocks - draw a slightly lighter gray rectangle
-                    cv2.rectangle(
-                        result, (x_start, y_start), (x_start + block_size, y_start + block_size), (50, 50, 50), 1
-                    )  # Light gray outline
+                    # Empty blocks - set to a slightly lighter gray
+                    result[y_start : y_start + block_size, x_start : x_start + block_size] = 50
 
+        # foo = np.any(result != 0, axis=2)
+        # print(str(foo))
+        # print(foo.shape)
+        # print(result.shape)
         return result
 
     def close(self):

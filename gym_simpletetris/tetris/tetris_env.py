@@ -7,7 +7,7 @@ from gym_simpletetris.tetris.tetris_shapes import WIDTH, HEIGHT, BUFFER_HEIGHT, 
 
 
 class TetrisEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60, "initial_level": 1}
 
     def __init__(
         self,
@@ -28,7 +28,7 @@ class TetrisEnv(gym.Env):
         penalise_holes_increase=False,
         lock_delay=0,
         step_reset=False,
-        initial_level=10,
+        initial_level=1,
     ):
         self.obs_type = obs_type
         self.extend_dims = extend_dims
