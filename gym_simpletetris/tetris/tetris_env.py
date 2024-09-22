@@ -79,7 +79,7 @@ class TetrisEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        state = self.engine.clear()
+        state = self.engine.reset()
         return self._get_observation(state), self.engine.get_info()
 
     def _get_observation(self, state):

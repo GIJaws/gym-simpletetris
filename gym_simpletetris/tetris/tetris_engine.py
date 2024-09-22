@@ -133,6 +133,7 @@ class TetrisEngine:
         self.anchor = None
 
         self.num_lives = num_lives
+        self.og_num_lives = num_lives
         self.n_deaths = 0
 
         self._lock_delay_fn = lambda x: (x + 1) % (max(lock_delay, 0) + 1)
@@ -328,11 +329,27 @@ class TetrisEngine:
         return state, reward, done
 
     def clear(self):
-        self.time = 0
+        self.score = 0
+        self.holes = 0
+        self.piece_height = 0
+        self._new_piece()
+        self.board = np.zeros_like(self.board)
+        self.num_lives = self.og_num_lives
+
+        self.level = self.initial_level
+        self.lines_for_next_level = 10
+        self.gravity_interval = self._calculate_gravity_interval()
+        self.gravity_timer = 0
+
+        return self.board
+
+    def reset(self):
+        self.time = -1
         self.score = 0
         self.holes = 0
         self.lines_cleared = 0
         self.piece_height = 0
+        self.n_deaths = 0
         self._new_piece()
         self.board = np.zeros_like(self.board)
 
