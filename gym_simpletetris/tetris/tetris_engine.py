@@ -76,6 +76,7 @@ class TetrisEngine:
         penalise_holes_increase=False,
         initial_level=1,
         preview_size=4,
+        num_lives=10,
     ):
         self.width = width
         self.height = height
@@ -131,11 +132,14 @@ class TetrisEngine:
         self.piece_height = 0
         self.anchor = None
 
+        self.num_lives = num_lives
         self.n_deaths = 0
 
         self._lock_delay_fn = lambda x: (x + 1) % (max(lock_delay, 0) + 1)
         self._lock_delay = 0
         self._step_reset = step_reset
+
+        self.prev_info = {}
 
     # TODO make this functional so no side effects can occur to prevent future bugs
     def hold_swap(self, shape, anchor, board):
@@ -223,13 +227,17 @@ class TetrisEngine:
             "lines_cleared": self.lines_cleared,
             "holes": self.holes,
             "deaths": self.n_deaths,
+            "lives_left": self.num_lives - self.n_deaths,
             "statistics": self.shape_counts,
             "level": self.level,
             "gravity_interval": self.gravity_interval,
             "next_piece": self.piece_queue.get_preview(),
             "held_piece": self.held_piece,
             "held_piece_name": self.held_piece_name,
+            "prev_info": self.prev_info,
         }
+
+        self.prev_info = info
 
         # print(info)
 
@@ -285,11 +293,10 @@ class TetrisEngine:
                     reward += self.scoring_system.calculate_clear_reward(cleared_lines)
                     self.score += self.scoring_system.calculate_clear_reward(cleared_lines)
 
+                    game_over = False
                     if np.any(self.board[:, : self.buffer_height]):
                         self._count_holes()
-                        self.n_deaths += 1
-                        done = True
-                        reward = -100
+                        game_over = True
                     else:
                         old_holes = self.holes
                         old_height = self.piece_height
@@ -304,9 +311,16 @@ class TetrisEngine:
                         self.piece_height = new_height
                         self._new_piece()
                         if is_occupied(self.shape, self.anchor, self.board):
-                            self.n_deaths += 1
+
+                            game_over = True
+                    if game_over:
+                        self.n_deaths += 1
+                        reward = -100
+
+                        if self.n_deaths > self.num_lives:
                             done = True
-                            reward = -100
+                        else:
+                            self.clear()
 
         self._set_piece(True)
         state = np.copy(self.board)
