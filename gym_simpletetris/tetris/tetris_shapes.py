@@ -11,6 +11,17 @@ SHAPES = {  # RGB here is GBR
 }
 SHAPE_NAMES = ("T", "J", "L", "Z", "S", "I", "O")
 
+BASIC_ACTIONS = {
+    0: "left",  # Move Left
+    1: "right",  # Move Right
+    2: "hard_drop",  # Hard Drop
+    3: "soft_drop",  # Soft Drop
+    4: "rotate_left",  # Rotate Left
+    5: "rotate_right",  # Rotate Right
+    6: "hold_swap",  # Hold/Swap
+    7: "idle",  # Idle
+}
+
 
 # TODO OTHER CONSTANTS I NEED TO MOVE TO A NEW FILE
 WIDTH = 10  # DEFAULT WIDTH OF THE PLAY FIELD

@@ -141,6 +141,7 @@ class TetrisEngine:
         self._step_reset = step_reset
 
         self.prev_info = {}
+        self.actions = []
 
     # TODO make this functional so no side effects can occur to prevent future bugs
     def hold_swap(self, shape, anchor, board):
@@ -236,6 +237,7 @@ class TetrisEngine:
             "held_piece": self.held_piece,
             "held_piece_name": self.held_piece_name,
             "prev_info": self.prev_info,
+            "actions": self.actions,
         }
 
         self.prev_info = info
@@ -263,6 +265,8 @@ class TetrisEngine:
             6: 2,  # Hold/Swap
             7: 0,  # Idle (lowest priority)
         }
+
+        self.actions = actions
 
         # Process each action in the sorted order
         for action in sorted(actions, key=lambda action: action_priority[action]):

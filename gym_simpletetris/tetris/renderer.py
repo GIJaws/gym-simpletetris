@@ -1,7 +1,7 @@
 import pygame
 import numpy as np
 
-from gym_simpletetris.tetris.tetris_shapes import SHAPES
+from gym_simpletetris.tetris.tetris_shapes import SHAPES, BASIC_ACTIONS
 
 
 class Renderer:
@@ -104,12 +104,15 @@ class Renderer:
 
     def _render_ui(self, game_state):
 
+        actions_str = "\n".join([BASIC_ACTIONS[act] for act in game_state["actions"]])
+
         x_offset = 2 * ((self.window_size - self.width * self.block_size) // 2)
         # Render score, lines, and level
         self._render_text(f"Score: {game_state['score']}", (x_offset, 10))
         self._render_text(f"Lines: {game_state['lines_cleared']}", (x_offset, 40))
         self._render_text(f"Level: {game_state['level']}", (x_offset, 70))
         self._render_text(f"FPS: {round(self.clock.get_fps(), 2)}", (x_offset, 100))
+        self._render_text(f"{actions_str}", (x_offset + 80, 130))
 
         # Render held piece
         self._render_piece_preview(game_state["held_piece_name"], (x_offset + 80, 10), "Held")
