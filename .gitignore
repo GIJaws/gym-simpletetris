@@ -31,3 +31,4 @@ ghostdriver.log
 .idea
 vizdoom.ini
 .venv/*
+.codeiumignore
