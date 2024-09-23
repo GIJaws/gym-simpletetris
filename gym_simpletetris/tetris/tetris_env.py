@@ -7,7 +7,7 @@ from gym_simpletetris.tetris.tetris_shapes import WIDTH, HEIGHT, BUFFER_HEIGHT, 
 
 
 class TetrisEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60, "initial_level": 1}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60, "initial_level": 1, "num_lives": 1}
 
     def __init__(
         self,
@@ -29,6 +29,7 @@ class TetrisEnv(gym.Env):
         lock_delay=0,
         step_reset=False,
         initial_level=1,
+        num_lives=1,
     ):
         self.obs_type = obs_type
         self.extend_dims = extend_dims
@@ -37,19 +38,20 @@ class TetrisEnv(gym.Env):
             width, height, buffer_height, visible_height, render_mode, self.metadata["render_fps"], window_size
         )
         self.engine = TetrisEngine(
-            width,
-            height,
-            buffer_height,
-            lock_delay,
-            step_reset,
-            reward_step,
-            penalise_height,
-            penalise_height_increase,
-            advanced_clears,
-            high_scoring,
-            penalise_holes,
-            penalise_holes_increase,
-            initial_level,
+            width=width,
+            height=height,
+            buffer_height=buffer_height,
+            lock_delay=lock_delay,
+            step_reset=step_reset,
+            reward_step=reward_step,
+            penalise_height=penalise_height,
+            penalise_height_increase=penalise_height_increase,
+            advanced_clears=advanced_clears,
+            high_scoring=high_scoring,
+            penalise_holes=penalise_holes,
+            penalise_holes_increase=penalise_holes_increase,
+            initial_level=initial_level,
+            num_lives=self.metadata["num_lives"],
         )
 
         self.render_mode = self.renderer.render_mode
