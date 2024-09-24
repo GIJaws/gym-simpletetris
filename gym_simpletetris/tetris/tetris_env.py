@@ -51,7 +51,7 @@ class TetrisEnv(gym.Env):
             penalise_holes=penalise_holes,
             penalise_holes_increase=penalise_holes_increase,
             initial_level=initial_level,
-            num_lives=self.metadata["num_lives"],
+            num_lives=num_lives,
         )
 
         self.render_mode = self.renderer.render_mode
