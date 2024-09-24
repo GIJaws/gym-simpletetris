@@ -81,6 +81,6 @@ def simplify_board(board):
 
 
 def format_value(v):
-    if isinstance(v, list):
+    if isinstance(v, (list, tuple)):
         return ", ".join([format_value(x) for x in v])
     return f"{v:.0f}" if isinstance(v, int) or v.is_integer() else f"{v:.6f}"

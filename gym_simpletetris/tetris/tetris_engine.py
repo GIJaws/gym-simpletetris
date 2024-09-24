@@ -107,9 +107,9 @@ class TetrisEngine:
         self.lines_for_next_level = self.level * 10  # Number of lines to clear for next level
         self.gravity_interval = self._calculate_gravity_interval()
         self.gravity_timer = 0
-        self.gravity_counter = 0
 
         self.time = -1
+
         self.score = -1
         self.holes = 0
         self.lines_cleared = 0
@@ -217,11 +217,13 @@ class TetrisEngine:
             "statistics": self.shape_counts,
             "level": self.level,
             "gravity_interval": self.gravity_interval,
+            "gravity_timer": self.gravity_timer,
             "next_piece": self.piece_queue.get_preview(),
             "held_piece": self.held_piece,
             "held_piece_name": self.held_piece_name,
             "prev_info": self.prev_info,
             "actions": self.actions,
+            "anchor": self.anchor,
         }
 
         self.prev_info = info
