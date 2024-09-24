@@ -223,7 +223,7 @@ class TetrisEngine:
             "held_piece_name": self.held_piece_name,
             "prev_info": self.prev_info,
             "actions": self.actions,
-            "anchor": self.anchor,
+            "anchor": (self.anchor[0], 40 - self.anchor[1]) if isinstance(self.anchor, tuple) else None,
         }
 
         self.prev_info = info
