@@ -347,6 +347,8 @@ class TetrisEngine:
         self.gravity_interval = self._calculate_gravity_interval()
         self.gravity_timer = 0
 
+        self.prev_info = {}
+
         return self.board
 
     def get_ghost_piece_position(self):
