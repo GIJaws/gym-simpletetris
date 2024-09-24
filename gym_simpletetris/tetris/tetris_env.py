@@ -1,8 +1,10 @@
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
-from .tetris_engine import TetrisEngine
-from .renderer import Renderer
+
+from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem
+from gym_simpletetris.tetris.tetris_engine import TetrisEngine
+from gym_simpletetris.tetris.renderer import Renderer
 from gym_simpletetris.tetris.tetris_shapes import WIDTH, HEIGHT, BUFFER_HEIGHT, VISIBLE_HEIGHT
 
 
@@ -19,13 +21,7 @@ class TetrisEnv(gym.Env):
         extend_dims=False,
         render_mode="rgb_array",
         window_size=512,
-        reward_step=False,
-        penalise_height=False,
-        penalise_height_increase=False,
-        advanced_clears=False,
-        high_scoring=False,
-        penalise_holes=False,
-        penalise_holes_increase=False,
+        scoring_system: AbstractScoringSystem | None = None,
         lock_delay=0,
         step_reset=False,
         initial_level=1,
@@ -34,8 +30,10 @@ class TetrisEnv(gym.Env):
         self.obs_type = obs_type
         self.extend_dims = extend_dims
 
+        self.render_mode = render_mode
+
         self.renderer = Renderer(
-            width, height, buffer_height, visible_height, render_mode, self.metadata["render_fps"], window_size
+            width, height, buffer_height, visible_height, self.render_mode, self.metadata["render_fps"], window_size
         )
         self.engine = TetrisEngine(
             width=width,
@@ -43,18 +41,10 @@ class TetrisEnv(gym.Env):
             buffer_height=buffer_height,
             lock_delay=lock_delay,
             step_reset=step_reset,
-            reward_step=reward_step,
-            penalise_height=penalise_height,
-            penalise_height_increase=penalise_height_increase,
-            advanced_clears=advanced_clears,
-            high_scoring=high_scoring,
-            penalise_holes=penalise_holes,
-            penalise_holes_increase=penalise_holes_increase,
+            scoring_system=scoring_system,
             initial_level=initial_level,
             num_lives=num_lives,
         )
-
-        self.render_mode = self.renderer.render_mode
 
         self.action_space = spaces.Discrete(7)
         self.observation_space = self._get_observation_space()

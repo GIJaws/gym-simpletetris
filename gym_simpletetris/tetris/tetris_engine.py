@@ -1,7 +1,7 @@
 import random
 import numpy as np
-from .scoring_system import ScoringSystem
-from .tetris_shapes import SHAPE_NAMES, SHAPES
+from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem, ScoringSystem
+from gym_simpletetris.tetris.tetris_shapes import SHAPE_NAMES, SHAPES
 import math
 
 
@@ -67,16 +67,10 @@ class TetrisEngine:
         buffer_height,
         lock_delay=0,
         step_reset=False,
-        reward_step=False,
-        penalise_height=False,
-        penalise_height_increase=False,
-        advanced_clears=False,
-        high_scoring=False,
-        penalise_holes=False,
-        penalise_holes_increase=False,
         initial_level=1,
         preview_size=4,
         num_lives=10,
+        scoring_system: AbstractScoringSystem | None = None,
     ):
         self.width = width
         self.height = height
@@ -85,15 +79,8 @@ class TetrisEngine:
         # Initialize the board with buffer zone at the bottom
         self.board = np.zeros(shape=(width, self.total_height, 3), dtype=np.uint8)
 
-        self.scoring_system = ScoringSystem(
-            reward_step,
-            penalise_height,
-            penalise_height_increase,
-            advanced_clears,
-            high_scoring,
-            penalise_holes,
-            penalise_holes_increase,
-        )
+        # Use the provided scoring system or create a default one
+        self.scoring_system = scoring_system or ScoringSystem({})
 
         self.value_action_map = {
             0: left,  # Move Left
@@ -105,9 +92,6 @@ class TetrisEngine:
             6: self.hold_swap,  # Hold/Swap
             7: idle,  # Idle
         }
-        # TODO REMOVE THESE COMMENTS AND WORK OUT WHAT ELSE IS NOT BEING USED
-        # self.action_value_map = dict([(j, i) for i, j in self.value_action_map.items()])
-        # self.nb_actions = len(self.value_action_map)
 
         self.held_piece = None  # No piece is held at the start
         self.held_piece_name = None
@@ -143,8 +127,8 @@ class TetrisEngine:
         self.prev_info = {}
         self.actions = []
 
-    # TODO make this functional so no side effects can occur to prevent future bugs
     def hold_swap(self, shape, anchor, board):
+        # TODO make this functional so no side effects can occur to prevent future bugs
         # ! assume that shape, anchor, and board is the same as self
 
         if self.hold_used:
@@ -388,6 +372,13 @@ class TetrisEngine:
         return state, self.shape, ghost_anchor, ghost_color
 
     def _set_piece(self, on=False):
+        """Set the current piece on or off in the game state.
+
+        Parameters
+        ----------
+        on : bool, optional
+            Whether to set the piece on or off. Defaults to False.
+        """
         if self.shape_name:
             color = SHAPES[self.shape_name]["color"] if on else (0, 0, 0)
             for i, j in self.shape:
