@@ -206,11 +206,14 @@ class TetrisEngine:
         return self.holes
 
     def get_info(self):
+
+        temp_lines_cleared = self.lines_cleared - self.prev_info.get("lines_cleared", 0)
         info = {
             "time": self.time,
             "current_piece": self.shape_name,
             "score": self.score,
             "lines_cleared": self.lines_cleared,
+            "lines_cleared_per_step": temp_lines_cleared,
             "holes": self.holes,
             "deaths": self.n_deaths,
             "lives_left": self.num_lives - self.n_deaths,
