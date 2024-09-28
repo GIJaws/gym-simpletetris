@@ -1,6 +1,5 @@
 from .input_handler import InputHandler
 import pygame
-import logging
 
 
 class HumanInputHandler(InputHandler):

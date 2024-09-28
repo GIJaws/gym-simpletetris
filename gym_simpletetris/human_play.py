@@ -53,8 +53,8 @@ def play_tetris(render_mode="human", record_actions=False):
 
     env = gym.make("SimpleTetris-v0", render_mode=render_mode)
     observation, info = env.reset()
-    last_observation = np.copy(observation)
-    prev_lines_cleared = 0
+    # last_observation = np.copy(observation)
+    # prev_lines_cleared = 0
     input_handler = HumanInputHandler(env.action_space, record_actions=record_actions)
 
     done = False
@@ -68,16 +68,16 @@ def play_tetris(render_mode="human", record_actions=False):
             break
         # Calculate reward based on game state
         game_over = terminated or truncated
-        current_reward = calculate_reward(
-            observation, info["lines_cleared"], game_over, last_observation, prev_lines_cleared
-        )
+        # current_reward = calculate_reward(
+        #     observation, info["lines_cleared"], game_over, last_observation, prev_lines_cleared
+        # )
 
         # Print the current reward to the console
         # print(f"Reward: {current_reward}, Lines Cleared: {info['lines_cleared']}")
 
         # Update last_observation for the next iteration
-        last_observation = np.copy(observation)
-        prev_lines_cleared = info["lines_cleared"]
+        # last_observation = np.copy(observation)
+        # prev_lines_cleared = info["lines_cleared"]
         if game_over:
             print(f"Game over! Final Score: {info['score']}")
             done = True
