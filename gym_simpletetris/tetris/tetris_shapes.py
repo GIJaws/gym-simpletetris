@@ -54,8 +54,13 @@ def simplify_board(board):
     Returns:
         np.ndarray: Simplified board with shape (width, height) as float32.
     """
-    # Assuming board shape is (10, 40, 3)
-    return np.any(board != 0, axis=2).astype(np.float32)
+    # TODO can I change this to bool or int? would that be better?
+    if board.ndim == 3:
+        return np.any(board != 0, axis=2).astype(np.float32)
+    elif board.ndim == 2:
+        return board.astype(np.float32)
+    else:
+        raise ValueError("Invalid board shape. Expected 2D or 3D array.")
 
 
 # Reverse mapping: action name to index

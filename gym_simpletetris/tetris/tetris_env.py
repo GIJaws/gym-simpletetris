@@ -1,3 +1,4 @@
+from typing import Any
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
@@ -5,7 +6,14 @@ from gymnasium import spaces
 from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem
 from gym_simpletetris.tetris.tetris_engine import TetrisEngine
 from gym_simpletetris.tetris.renderer import Renderer
-from gym_simpletetris.tetris.tetris_shapes import WIDTH, HEIGHT, BUFFER_HEIGHT, VISIBLE_HEIGHT
+from gym_simpletetris.tetris.tetris_shapes import (
+    WIDTH,
+    HEIGHT,
+    BUFFER_HEIGHT,
+    VISIBLE_HEIGHT,
+    BASIC_ACTIONS,
+    simplify_board,
+)
 
 
 class TetrisEnv(gym.Env):
@@ -46,8 +54,10 @@ class TetrisEnv(gym.Env):
             num_lives=num_lives,
         )
 
-        self.action_space = spaces.Discrete(7)
+        self.action_space = spaces.Discrete(len(BASIC_ACTIONS))
         self.observation_space = self._get_observation_space()
+
+        self.total_steps = 0
 
     def _get_observation_space(self):
         if self.obs_type == "ram":
@@ -67,12 +77,14 @@ class TetrisEnv(gym.Env):
         state, reward, done = self.engine.step(action)
         if self.renderer.render_mode == "human":
             self.render()
+
+        self.total_steps += 1
         return self._get_observation(state), reward, done, done, self.engine.get_info()
 
-    def reset(self, seed=None, options=None):
-
-        super().reset(seed=seed)
+    def reset(self, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple:
+        super().reset(seed=seed, options=options)
         state = self.engine.reset()
+
         return self._get_observation(state), self.engine.get_info()
 
     def _get_observation(self, state):

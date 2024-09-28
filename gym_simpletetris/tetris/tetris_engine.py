@@ -108,6 +108,8 @@ class TetrisEngine:
         self.gravity_interval = self._calculate_gravity_interval()
         self.gravity_timer = 0
 
+        self.piece_timer = 0
+
         self.time = -1
 
         self.score = -1
@@ -207,13 +209,13 @@ class TetrisEngine:
 
     def get_info(self):
 
-        temp_lines_cleared = self.lines_cleared - self.prev_info.get("lines_cleared", 0)
+        lines_cleared_per_step = self.lines_cleared - self.prev_info.get("lines_cleared", 0)
         info = {
             "time": self.time,
             "current_piece": self.shape_name,
             "score": self.score,
-            "lines_cleared": self.lines_cleared,
-            "lines_cleared_per_step": temp_lines_cleared,
+            "total_lines_cleared": self.lines_cleared,
+            "lines_cleared_per_step": lines_cleared_per_step,
             "holes": self.holes,
             "deaths": self.n_deaths,
             "lives_left": self.num_lives - self.n_deaths,
@@ -221,6 +223,7 @@ class TetrisEngine:
             "level": self.level,
             "gravity_interval": self.gravity_interval,
             "gravity_timer": self.gravity_timer,
+            "piece_timer": self.piece_timer,
             "next_piece": self.piece_queue.get_preview(),
             "held_piece": self.held_piece,
             "held_piece_name": self.held_piece_name,
@@ -264,6 +267,7 @@ class TetrisEngine:
 
         self.time += 1
         self.gravity_timer += 1
+        self.piece_timer += 1
         reward = self.scoring_system.calculate_step_reward()
 
         done = False
@@ -278,6 +282,7 @@ class TetrisEngine:
             self.anchor = new_anchor
 
             if self._has_dropped():
+                self.piece_timer = 0
                 self._lock_delay = self._lock_delay_fn(self._lock_delay)
 
                 if self._lock_delay == 0:
@@ -334,6 +339,7 @@ class TetrisEngine:
         self.lines_for_next_level = 10
         self.gravity_interval = self._calculate_gravity_interval()
         self.gravity_timer = 0
+        self.piece_timer = 0
 
         return self.board
 
@@ -351,6 +357,7 @@ class TetrisEngine:
         self.lines_for_next_level = 10
         self.gravity_interval = self._calculate_gravity_interval()
         self.gravity_timer = 0
+        self.piece_timer = 0
 
         self.prev_info = {}
 
