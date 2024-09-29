@@ -109,7 +109,7 @@ class Renderer:
         x_offset = 2 * ((self.window_size - self.width * self.block_size) // 2)
         # Render score, lines, and level
         self._render_text(f"Score: {game_state['score']}", (x_offset, 10))
-        self._render_text(f"Lines: {game_state['lines_cleared']}", (x_offset, 40))
+        self._render_text(f"Lines: {game_state['total_lines_cleared']}", (x_offset, 40))
         self._render_text(f"Level: {game_state['level']}", (x_offset, 70))
         self._render_text(f"FPS: {round(self.clock.get_fps(), 2)}", (x_offset, 100))
         self._render_text(f"{actions_str}", (x_offset + 80, 130))

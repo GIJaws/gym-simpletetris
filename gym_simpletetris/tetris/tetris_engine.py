@@ -82,14 +82,15 @@ class TetrisEngine:
         # Use the provided scoring system or create a default one
         self.scoring_system = scoring_system or ScoringSystem({})
 
+        # TODO move this to tetris_shapes so it's dynamic to the actions
         self.value_action_map = {
             0: left,  # Move Left
             1: right,  # Move Right
-            2: hard_drop,  # Hard Drop
-            3: soft_drop,  # Soft Drop
-            4: rotate_left,  # Rotate Left
-            5: rotate_right,  # Rotate Right
-            6: self.hold_swap,  # Hold/Swap
+            2: rotate_left,  # Rotate Left
+            3: rotate_right,  # Rotate Right
+            4: self.hold_swap,  # Hold/Swap
+            5: hard_drop,  # Hard Drop
+            6: soft_drop,  # Soft Drop
             7: idle,  # Idle
         }
 
