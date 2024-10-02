@@ -152,8 +152,19 @@ class TetrisEngine:
         return cleared_lines
 
     def _count_holes(self):
-        np.count_nonzero(self.board.cumsum(axis=1) * ~self.board.astype(bool))
-        return self.holes
+        board = simplify_board(self.board)
+        holes = 0
+
+        num_cols, num_rows = board.shape
+        for col in range(num_cols):
+            block_found = False
+            for row in range(num_rows):
+                cell = board[col, row]
+                if cell != 0:
+                    block_found = True
+                elif block_found and cell == 0:
+                    holes += 1
+        return holes
 
     def get_info(self):
 
