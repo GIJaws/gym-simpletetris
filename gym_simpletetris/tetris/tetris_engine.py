@@ -111,9 +111,9 @@ class TetrisEngine:
 
         self.piece_timer = 0
 
-        self.time = -1
+        self.time = 0
 
-        self.score = -1
+        self.score = 0
         self.holes = 0
         self.lines_cleared = 0
         self.piece_height = 0
@@ -235,8 +235,6 @@ class TetrisEngine:
 
         self.prev_info = info
 
-        # print(info)
-
         return info
 
     def _calculate_gravity_interval(self):
@@ -251,11 +249,11 @@ class TetrisEngine:
         action_priority = {
             0: 1,  # Move Left
             1: 1,  # Move Right
-            2: 3,  # Hard Drop (highest priority)
-            3: 2,  # Soft Drop
-            4: 1,  # Rotate Left
-            5: 1,  # Rotate Right
-            6: 2,  # Hold/Swap
+            2: 1,  # Rotate Left
+            3: 1,  # Rotate Right
+            4: 2,  # Hold/Swap
+            5: 3,  # Hard Drop (highest priority)
+            6: 2,  # Soft Drop
             7: 0,  # Idle (lowest priority)
         }
 
@@ -274,7 +272,7 @@ class TetrisEngine:
         done = False
         cleared_lines = 0
 
-        if 2 in actions or self.gravity_timer >= self.gravity_interval and self.gravity_interval != float("inf"):
+        if 5 in actions or self.gravity_timer >= self.gravity_interval and self.gravity_interval != float("inf"):
             self.gravity_timer = 0
             self.shape, new_anchor = soft_drop(self.shape, self.anchor, self.board)
             if self._step_reset and (self.anchor != new_anchor):
@@ -282,7 +280,7 @@ class TetrisEngine:
 
             self.anchor = new_anchor
 
-            if self._has_dropped():
+            if self._has_dropped() or 5 in actions:
                 self.piece_timer = 0
                 self._lock_delay = self._lock_delay_fn(self._lock_delay)
 
@@ -345,7 +343,7 @@ class TetrisEngine:
         return self.board
 
     def reset(self):
-        self.time = -1
+        self.time = 0
         self.score = 0
         self.holes = 0
         self.lines_cleared = 0

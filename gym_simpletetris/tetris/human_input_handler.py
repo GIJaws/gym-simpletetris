@@ -18,11 +18,11 @@ class HumanInputHandler(InputHandler):
         self.key_action_map = {
             pygame.K_a: 0,  # Move Left
             pygame.K_d: 1,  # Move Right
-            pygame.K_w: 2,  # Hard Drop
-            pygame.K_s: 3,  # Soft Drop
-            pygame.K_LEFT: 4,  # Rotate Left
-            pygame.K_RIGHT: 5,  # Rotate Right
-            pygame.K_LSHIFT: 6,  # Hold/Swap
+            pygame.K_LEFT: 2,  # Rotate Left
+            pygame.K_RIGHT: 3,  # Rotate Right
+            pygame.K_LSHIFT: 4,  # Hold/Swap
+            pygame.K_w: 5,  # Hard Drop
+            pygame.K_s: 6,  # Soft Drop
             pygame.K_ESCAPE: "quit",
         }
 
