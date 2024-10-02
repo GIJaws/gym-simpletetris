@@ -19,7 +19,7 @@ BASIC_ACTIONS = {
     3: "rotate_right",  # Rotate Right
     4: "hold_swap",  # Hold/Swap
     5: "hard_drop",  # Hard Drop
-    # 6: "soft_drop",  # Soft Drop
+    6: "soft_drop",  # Soft Drop
     # 7: "idle",  # Idle
 }  # TODO for now lets not worry about soft dropping or idling until we get a model that can actually sorta play
 

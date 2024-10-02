@@ -1,62 +1,8 @@
 import random
 import numpy as np
 from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem, ScoringSystem
-from gym_simpletetris.tetris.tetris_shapes import SHAPE_NAMES, SHAPES
+from gym_simpletetris.tetris.tetris_shapes import SHAPE_NAMES, SHAPES, simplify_board
 import math
-
-
-def rotated(shape, cclk=False):
-    if cclk:
-        return [(-j, i) for i, j in shape]
-    else:
-        return [(j, -i) for i, j in shape]
-
-
-def is_occupied(shape, anchor, board):
-    for i, j in shape:
-        x = anchor[0] + i
-        y = anchor[1] + j
-        if x < 0 or x >= board.shape[0] or y >= board.shape[1]:
-            return True  # Out of bounds
-        if np.any(board[x, y]):
-            return True  # Position already occupied
-    return False
-
-
-def left(shape, anchor, board):
-    new_anchor = (anchor[0] - 1, anchor[1])
-    return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
-
-
-def right(shape, anchor, board):
-    new_anchor = (anchor[0] + 1, anchor[1])
-
-    return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
-
-
-def soft_drop(shape, anchor, board):
-    new_anchor = (anchor[0], anchor[1] + 1)
-    return (shape, anchor) if is_occupied(shape, new_anchor, board) else (shape, new_anchor)
-
-
-def hard_drop(shape, anchor, board):
-    while not is_occupied(shape, (anchor[0], anchor[1] + 1), board):
-        anchor = (anchor[0], anchor[1] + 1)
-    return shape, anchor
-
-
-def rotate_left(shape, anchor, board):
-    new_shape = rotated(shape, cclk=False)
-    return (shape, anchor) if is_occupied(new_shape, anchor, board) else (new_shape, anchor)
-
-
-def rotate_right(shape, anchor, board):
-    new_shape = rotated(shape, cclk=True)
-    return (shape, anchor) if is_occupied(new_shape, anchor, board) else (new_shape, anchor)
-
-
-def idle(shape, anchor, board):
-    return (shape, anchor)
 
 
 class TetrisEngine:
@@ -84,23 +30,24 @@ class TetrisEngine:
 
         # TODO move this to tetris_shapes so it's dynamic to the actions
         self.value_action_map = {
-            0: left,  # Move Left
-            1: right,  # Move Right
-            2: rotate_left,  # Rotate Left
-            3: rotate_right,  # Rotate Right
+            0: TetrisEngine.left,  # Move Left
+            1: TetrisEngine.right,  # Move Right
+            2: TetrisEngine.rotate_left,  # Rotate Left
+            3: TetrisEngine.rotate_right,  # Rotate Right
             4: self.hold_swap,  # Hold/Swap
-            5: hard_drop,  # Hard Drop
-            6: soft_drop,  # Soft Drop
-            7: idle,  # Idle
+            5: TetrisEngine.hard_drop,  # Hard Drop
+            6: TetrisEngine.soft_drop,  # Soft Drop
+            7: TetrisEngine.idle,  # Idle
         }
 
         self.held_piece = None  # No piece is held at the start
         self.held_piece_name = None
         self.hold_used = False
         self.piece_queue = PieceQueue(preview_size)
-        self.shape_counts = dict(zip(SHAPE_NAMES, [0] * len(SHAPES)))
+        self.shape_counts = dict(zip(SHAPE_NAMES, [0] * len(SHAPES)))  # TODO do this but for actions
         self.shape = None
         self.shape_name = None
+        self.anchor = (np.nan, np.nan)
         self._new_piece()
 
         self.initial_level = initial_level
@@ -115,9 +62,9 @@ class TetrisEngine:
 
         self.score = 0
         self.holes = 0
-        self.lines_cleared = 0
+        self.old_holes = self.holes
         self.piece_height = 0
-        self.anchor = None
+        self.lines_cleared = 0
 
         self.num_lives = num_lives
         self.og_num_lives = num_lives
@@ -172,7 +119,7 @@ class TetrisEngine:
         return (spawn_x, spawn_y)
 
     def _has_dropped(self):
-        return is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)
+        return TetrisEngine.is_occupied(self.shape, (self.anchor[0], self.anchor[1] + 1), self.board)
 
     def _clear_lines(self):
         # Check each row from top to bottom
@@ -205,19 +152,29 @@ class TetrisEngine:
         return cleared_lines
 
     def _count_holes(self):
-        self.holes = np.count_nonzero(self.board.cumsum(axis=1) * ~self.board.astype(bool))
+        np.count_nonzero(self.board.cumsum(axis=1) * ~self.board.astype(bool))
         return self.holes
 
     def get_info(self):
 
         lines_cleared_per_step = self.lines_cleared - self.prev_info.get("lines_cleared", 0)
+
+        ghost_piece_anchor = self.get_ghost_piece_position()
         info = {
             "time": self.time,
             "current_piece": self.shape_name,
+            "current_shape": self.shape,
+            "anchor": (self.anchor[0], 40 - self.anchor[1]),
+            "current_piece_coords": TetrisEngine._get_coords(self.shape, self.anchor, self.width, self.total_height),
+            "ghost_piece_anchor": (ghost_piece_anchor[0], 40 - ghost_piece_anchor[1]),
+            "ghost_piece_coords": TetrisEngine._get_coords(
+                self.shape, ghost_piece_anchor, self.width, self.total_height
+            ),
             "score": self.score,
             "total_lines_cleared": self.lines_cleared,
             "lines_cleared_per_step": lines_cleared_per_step,
             "holes": self.holes,
+            "old_holes": self.old_holes,
             "deaths": self.n_deaths,
             "lives_left": self.num_lives - self.n_deaths,
             "statistics": self.shape_counts,
@@ -230,7 +187,17 @@ class TetrisEngine:
             "held_piece_name": self.held_piece_name,
             "prev_info": self.prev_info,
             "actions": self.actions,
-            "anchor": (self.anchor[0], 40 - self.anchor[1]) if isinstance(self.anchor, tuple) else None,
+            "hold_used": self.hold_used,
+            "settled_board": TetrisEngine.set_piece(
+                self.shape_name,
+                self.shape,
+                self.anchor,
+                simplify_board(self.board),
+                self.width,
+                self.total_height,
+                on=False,
+                use_color=False,
+            ),
         }
 
         self.prev_info = info
@@ -274,7 +241,7 @@ class TetrisEngine:
 
         if 5 in actions or self.gravity_timer >= self.gravity_interval and self.gravity_interval != float("inf"):
             self.gravity_timer = 0
-            self.shape, new_anchor = soft_drop(self.shape, self.anchor, self.board)
+            self.shape, new_anchor = TetrisEngine.soft_drop(self.shape, self.anchor, self.board)
             if self._step_reset and (self.anchor != new_anchor):
                 self._lock_delay = 0
 
@@ -292,23 +259,22 @@ class TetrisEngine:
                     self.score += self.scoring_system.calculate_clear_reward(cleared_lines)
 
                     game_over = False
+                    self.old_holes = self.holes
+                    self.old_height = self.piece_height
+                    self.holes = self._count_holes()
                     if np.any(self.board[:, : self.buffer_height]):
-                        self._count_holes()
                         game_over = True
                     else:
-                        old_holes = self.holes
-                        old_height = self.piece_height
-                        self._count_holes()
                         new_height = sum(np.any(self.board, axis=0))
 
-                        reward += self.scoring_system.calculate_height_penalty(self.board)
-                        reward += self.scoring_system.calculate_height_increase_penalty(new_height, old_height)
-                        reward += self.scoring_system.calculate_holes_penalty(self.holes)
-                        reward += self.scoring_system.calculate_holes_increase_penalty(self.holes, old_holes)
+                        # reward += self.scoring_system.calculate_height_penalty(self.board)
+                        # reward += self.scoring_system.calculate_height_increase_penalty(new_height, self.old_height)
+                        # reward += self.scoring_system.calculate_holes_penalty(self.holes)
+                        # reward += self.scoring_system.calculate_holes_increase_penalty(self.holes, self.old_holes)
 
                         self.piece_height = new_height
                         self._new_piece()
-                        if is_occupied(self.shape, self.anchor, self.board):
+                        if TetrisEngine.is_occupied(self.shape, self.anchor, self.board):
 
                             game_over = True
                     if game_over:
@@ -321,7 +287,7 @@ class TetrisEngine:
                             self.clear()
 
         self._set_piece(True)
-        state = np.copy(self.board)
+        state = np.copy(self.board)  # Ensure state being returned contains the current piece
         self._set_piece(False)
         return state, reward, done
 
@@ -329,6 +295,8 @@ class TetrisEngine:
         self.score = 0
         self.holes = 0
         self.piece_height = 0
+        self.old_holes = self.holes
+
         self._new_piece()
         self.board = np.zeros_like(self.board)
         self.num_lives = self.og_num_lives
@@ -348,6 +316,7 @@ class TetrisEngine:
         self.holes = 0
         self.lines_cleared = 0
         self.piece_height = 0
+        self.old_holes = self.holes
         self.n_deaths = 0
         self._new_piece()
         self.board = np.zeros_like(self.board)
@@ -364,7 +333,7 @@ class TetrisEngine:
 
     def get_ghost_piece_position(self):
         ghost_anchor = self.anchor
-        while not is_occupied(self.shape, ghost_anchor, self.board):
+        while not TetrisEngine.is_occupied(self.shape, ghost_anchor, self.board):
             ghost_anchor = (ghost_anchor[0], ghost_anchor[1] + 1)
         # Move back up one row to the last valid position
         ghost_anchor = (ghost_anchor[0], ghost_anchor[1] - 1)
@@ -392,13 +361,79 @@ class TetrisEngine:
         on : bool, optional
             Whether to set the piece on or off. Defaults to False.
         """
-        if self.shape_name:
-            color = SHAPES[self.shape_name]["color"] if on else (0, 0, 0)
-            for i, j in self.shape:
-                x, y = int(self.anchor[0] + i), int(self.anchor[1] + j)
-                # TODO should the '0' in `0 <= y < self.total_height` be self.buffer_height??????
-                if 0 <= x < self.width and 0 <= y < self.total_height:
-                    self.board[x, y] = color
+        self.board = TetrisEngine.set_piece(
+            self.shape_name, self.shape, self.anchor, self.board, self.width, self.total_height, on=on
+        )
+
+    @staticmethod
+    def set_piece(shape_name, shape, anchor, in_board, width, total_height, on=False, use_color=True):
+        """
+        Set the given shape on or off in the given game state.
+
+        Parameters
+        ----------
+        shape_name : str
+            The name of the shape to set.
+        shape : List[Tuple[int, int]]
+            The shape to set.
+        anchor : Tuple[int, int]
+            The anchor position of the shape.
+        in_board : np.ndarray
+            The game state to modify.
+        width : int
+            The width of the game state.
+        total_height : int
+            The total height of the game state.
+        on : bool, optional
+            Whether to set the shape on or off. Defaults to False.
+        use_color : bool, optional
+            Whether to use the color of the shape. Defaults to True.
+
+        Returns
+        -------
+        np.ndarray
+            The modified game state.
+        """
+        board = np.copy(in_board)
+
+        if shape_name:
+            if use_color:
+                color = SHAPES[shape_name]["color"] if on else (0, 0, 0)
+            else:
+                color = 1 if on else 0
+            for i, j in shape:
+                x, y = int(anchor[0] + i), int(anchor[1] + j)
+                if 0 <= x < width and 0 <= y < total_height:
+                    board[x, y] = color
+
+        return board
+
+    @staticmethod
+    def _get_coords(shape, anchor, width, total_height):
+        """Get the coordinates of the shape on the board.
+
+        Parameters
+        ----------
+        shape : List[Tuple[int, int]]
+            The shape to get coordinates for.
+        anchor : Tuple[int, int]
+            The anchor position of the shape.
+        width : int
+            The width of the game state.
+        total_height : int
+            The total height of the game state.
+
+        Returns
+        -------
+        List[Tuple[int, int]]
+            The coordinates of the shape on the board.
+        """
+        coords_list = []
+        for i, j in shape:
+            x, y = int(anchor[0] + i), int(anchor[1] + j)
+            if 0 <= x < width and 0 <= y < total_height:
+                coords_list.append((x, 40 - y))
+        return coords_list
 
     def __repr__(self):
         self._set_piece(True)
@@ -407,6 +442,60 @@ class TetrisEngine:
         s += "\no" + "-" * self.width + "o"
         self._set_piece(False)
         return s
+
+    @staticmethod
+    def rotated(shape, cclk=False):
+        if cclk:
+            return [(-j, i) for i, j in shape]
+        else:
+            return [(j, -i) for i, j in shape]
+
+    @staticmethod
+    def is_occupied(shape, anchor, board):
+        for i, j in shape:
+            x = anchor[0] + i
+            y = anchor[1] + j
+            if x < 0 or x >= board.shape[0] or y >= board.shape[1]:
+                return True  # Out of bounds
+            if np.any(board[x, y]):
+                return True  # Position already occupied
+        return False
+
+    @staticmethod
+    def left(shape, anchor, board):
+        new_anchor = (anchor[0] - 1, anchor[1])
+        return (shape, anchor) if TetrisEngine.is_occupied(shape, new_anchor, board) else (shape, new_anchor)
+
+    @staticmethod
+    def right(shape, anchor, board):
+        new_anchor = (anchor[0] + 1, anchor[1])
+
+        return (shape, anchor) if TetrisEngine.is_occupied(shape, new_anchor, board) else (shape, new_anchor)
+
+    @staticmethod
+    def soft_drop(shape, anchor, board):
+        new_anchor = (anchor[0], anchor[1] + 1)
+        return (shape, anchor) if TetrisEngine.is_occupied(shape, new_anchor, board) else (shape, new_anchor)
+
+    @staticmethod
+    def hard_drop(shape, anchor, board):
+        while not TetrisEngine.is_occupied(shape, (anchor[0], anchor[1] + 1), board):
+            anchor = (anchor[0], anchor[1] + 1)
+        return shape, anchor
+
+    @staticmethod
+    def rotate_left(shape, anchor, board):
+        new_shape = TetrisEngine.rotated(shape, cclk=False)
+        return (shape, anchor) if TetrisEngine.is_occupied(new_shape, anchor, board) else (new_shape, anchor)
+
+    @staticmethod
+    def rotate_right(shape, anchor, board):
+        new_shape = TetrisEngine.rotated(shape, cclk=True)
+        return (shape, anchor) if TetrisEngine.is_occupied(new_shape, anchor, board) else (new_shape, anchor)
+
+    @staticmethod
+    def idle(shape, anchor, board):
+        return (shape, anchor)
 
 
 class PieceQueue:

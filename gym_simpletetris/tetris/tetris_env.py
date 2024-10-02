@@ -59,6 +59,9 @@ class TetrisEnv(gym.Env):
 
         self.total_steps = 0
 
+    def get_total_steps(self):
+        return self.total_steps
+
     def _get_observation_space(self):
         if self.obs_type == "ram":
             shape = (
