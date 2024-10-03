@@ -11,8 +11,7 @@ from gym_simpletetris.tetris.tetris_shapes import (
     HEIGHT,
     BUFFER_HEIGHT,
     VISIBLE_HEIGHT,
-    BASIC_ACTIONS,
-    simplify_board,
+    ACTION_COMBINATIONS,
 )
 
 
@@ -54,7 +53,7 @@ class TetrisEnv(gym.Env):
             num_lives=num_lives,
         )
 
-        self.action_space = spaces.Discrete(len(BASIC_ACTIONS))
+        self.action_space = spaces.Discrete(len(ACTION_COMBINATIONS))
         self.observation_space = self._get_observation_space()
 
         self.total_steps = 0

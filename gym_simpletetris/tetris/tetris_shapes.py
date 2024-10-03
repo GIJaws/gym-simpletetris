@@ -19,7 +19,7 @@ BASIC_ACTIONS = {
     3: "rotate_right",  # Rotate Right
     4: "hold_swap",  # Hold/Swap
     5: "hard_drop",  # Hard Drop
-    6: "soft_drop",  # Soft Drop
+    # 6: "soft_drop",  # Soft Drop
     # 7: "idle",  # Idle
 }  # TODO for now lets not worry about soft dropping or idling until we get a model that can actually sorta play
 
@@ -27,6 +27,19 @@ BASIC_ACTIONS = {
 # ? Can have more then one action as its a list of actions but for now lets just get
 #  ? the model clearing a line consistently
 ACTION_COMBINATIONS = {ii: [ii] for ii in BASIC_ACTIONS}
+# ACTION_COMBINATIONS = {
+#     0: [0],  # left
+#     1: [1],  # right
+#     2: [2],  # rotate_left
+#     3: [3],  # rotate_right
+#     4: [4],  # hold_swap
+#     5: [5],  # hard_drop
+#     6: [0, 5],  # left + hard_drop
+#     7: [1, 5],  # right + hard_drop
+#     8: [2, 5],  # rotate_left + hard_drop
+#     9: [3, 5],  # rotate_right + hard_drop
+#     10: [4, 5],  # hold_swap + hard_drop
+# }
 
 
 def bitmask_to_actions(action_bitmask):

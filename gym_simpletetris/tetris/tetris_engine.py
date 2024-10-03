@@ -311,7 +311,6 @@ class TetrisEngine:
         self._new_piece()
         self.board = np.zeros_like(self.board)
         self.num_lives = self.og_num_lives
-        self.prev_info = {}
 
         self.level = self.initial_level
         self.lines_for_next_level = 10
@@ -319,6 +318,8 @@ class TetrisEngine:
         self.gravity_timer = 0
         self.piece_timer = 0
 
+        self.prev_info = {}
+        self.prev_info = self.get_info()
         return self.board
 
     def reset(self):
@@ -339,6 +340,7 @@ class TetrisEngine:
         self.piece_timer = 0
 
         self.prev_info = {}
+        self.prev_info = self.get_info()
 
         return self.board
 
