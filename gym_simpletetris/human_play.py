@@ -10,7 +10,7 @@ from gym_simpletetris.tetris.human_input_handler import HumanInputHandler
 
 def play_tetris(render_mode="human", record_actions=False):
 
-    env = gym.make("SimpleTetris-v0", render_mode=render_mode, num_lives=1000, render_fps=5)
+    env = gym.make("SimpleTetris-v0", render_mode=render_mode, num_lives=1000, render_fps=2)
     observation, info = env.reset()
     input_handler = HumanInputHandler(env.action_space, record_actions=record_actions)
 
