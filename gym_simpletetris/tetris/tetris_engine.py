@@ -1,7 +1,7 @@
 import random
 import numpy as np
 from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem, ScoringSystem
-from gym_simpletetris.tetris.tetris_shapes import SHAPE_NAMES, SHAPES, simplify_board
+from gym_simpletetris.tetris.tetris_shapes import BASIC_ACTIONS_NAME_MAP, SHAPE_NAMES, SHAPES, simplify_board
 import math
 
 
@@ -75,6 +75,9 @@ class TetrisEngine:
         self._step_reset = step_reset
 
         self.actions = [-99]
+        self.action_history = []
+        self.is_finesse = True  # no actions means finesse is true
+        self.finesse_evaluator = FinesseEvaluator()
         self.game_over = False
         self.just_died = False
 
@@ -233,6 +236,8 @@ class TetrisEngine:
             "heights": TetrisEngine.get_column_heights(settled_board),
             "agg_height": np.sum(heights) / 200,
             "game_over": self.game_over,
+            "is_finesse": self.is_finesse,
+            "get_finesse_score": self.finesse_evaluator.get_finesse_score(),
         }
 
         self.just_died = False
@@ -262,6 +267,11 @@ class TetrisEngine:
         }
 
         self.actions = actions
+
+        # Update action history
+        self.action_history.append(actions)
+
+        self.is_finesse = all(self.finesse_evaluator.evaluate_action(act) for act in actions)
 
         # Process each action in the sorted order
         for action in sorted(actions, key=lambda action: action_priority[action]):
@@ -345,8 +355,13 @@ class TetrisEngine:
         self.gravity_timer = 0
         self.piece_timer = 0
 
+        self.action_history = []
+        self.is_finesse = True  # no actions means finesse is true
+
+        self.finesse_evaluator.reset()
         self.prev_info = {}
         self.prev_info = self.get_info()
+
         return self.board
 
     def reset(self):
@@ -367,6 +382,10 @@ class TetrisEngine:
         self.gravity_timer = 0
         self.piece_timer = 0
 
+        self.action_history = []
+        self.is_finesse = True  # no actions means finesse is true
+
+        self.finesse_evaluator.reset()
         self.prev_info = {}
         self.prev_info = self.get_info()
 
@@ -608,3 +627,88 @@ class PieceQueue:
         while len(self.pieces) < self.preview_size:
             self.fill_queue()
         return self.pieces[: self.preview_size]
+
+
+class FinesseEvaluator:
+    def __init__(self):
+        self.rotation_actions = {BASIC_ACTIONS_NAME_MAP["rotate_left"], BASIC_ACTIONS_NAME_MAP["rotate_right"]}
+        self.translation_actions = {BASIC_ACTIONS_NAME_MAP["left"], BASIC_ACTIONS_NAME_MAP["right"]}
+        self.hard_drop_action = BASIC_ACTIONS_NAME_MAP["hard_drop"]
+        self.reset()
+
+    def reset(self):
+        self.actions = []
+        self.rotation_phase = True
+        self.translation_phase = False
+        self.hard_drop_phase = False
+
+    def evaluate_action(self, action: int) -> bool:
+        """Evaluate a single action for finesse.
+
+        Args:
+        action (int): The action to evaluate
+
+        Returns:
+        bool: True if the action maintains finesse, False otherwise
+        """
+        self.actions.append(action)
+
+        if action in self.rotation_actions:
+            if self.translation_phase or self.hard_drop_phase:
+                return False
+        elif action in self.translation_actions:
+            if self.hard_drop_phase:
+                return False
+            self.rotation_phase = False
+            self.translation_phase = True
+        elif action == self.hard_drop_action:
+            self.hard_drop_phase = True
+        else:
+            return False  # Unknown action
+
+        return True
+
+    def is_finesse_complete(self) -> bool:
+        """Check if the current sequence of actions completes a finesse move."""
+        return self.hard_drop_phase
+
+    def get_finesse_score(self) -> float:
+        """Calculate a finesse score for the current sequence of actions.
+
+        Returns:
+        float: A score between 0 and 1, where 1 is perfect finesse.
+        """
+        if not self.actions:
+            return 0.0
+
+        score = 1.0
+
+        # Penalize for rotations after translations
+        if any(action in self.rotation_actions for action in self.actions[1:]):
+            score *= 0.8
+
+        # Penalize for not ending with a hard drop
+        if self.actions[-1] != self.hard_drop_action:
+            score *= 0.7
+
+        # Slight penalty for each action, encouraging efficiency
+        score *= 0.98 ** len(self.actions)
+
+        return score
+
+    @staticmethod
+    def check_finesse_approx(actions: list[list[int]]) -> bool:
+        """Check if the given actions are close to optimal according to the Finesse criteria
+
+        Args:
+        actions (list[list[int]]): The actions to check
+
+        Returns:
+        bool: True if the actions are close to optimal according to the Finesse criteria, False otherwise
+        """
+        evaluator = FinesseEvaluator()
+        for action_group in actions:
+            for action in action_group:
+                if not evaluator.evaluate_action(action):
+                    return False
+        return evaluator.is_finesse_complete()

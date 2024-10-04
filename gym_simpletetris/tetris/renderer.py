@@ -103,23 +103,31 @@ class Renderer:
                     pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
 
     def _render_ui(self, game_state):
+        x_offset = 2 * ((self.window_size - self.width * self.block_size) // 2)
+        y_offset = 10
+        gap = 30
+        for key, value in [
+            ("is_finesse", game_state["is_finesse"]),
+            ("finesse_score", game_state["get_finesse_score"]),
+            ("Score", game_state["score"]),
+            ("Lines", game_state["total_lines_cleared"]),
+            ("Level", game_state["level"]),
+            ("FPS", round(self.clock.get_fps(), 2)),
+        ]:
+            self._render_text(f"{key}: {value}", (x_offset, y_offset))
+            y_offset += gap
 
         # TODO MAKE THIS ABLE TO HANDLE LIST/COMBOS OF ACTIONS
-        actions_str = "\n".join([BASIC_ACTIONS.get(act, "NO_ACTION") for act in game_state["actions"]])
-
-        x_offset = 2 * ((self.window_size - self.width * self.block_size) // 2)
-        # Render score, lines, and level
-        self._render_text(f"Score: {game_state['score']}", (x_offset, 10))
-        self._render_text(f"Lines: {game_state['total_lines_cleared']}", (x_offset, 40))
-        self._render_text(f"Level: {game_state['level']}", (x_offset, 70))
-        self._render_text(f"FPS: {round(self.clock.get_fps(), 2)}", (x_offset, 100))
-        self._render_text(f"{actions_str}", (x_offset + 80, 130))
+        actions_str = "+".join([BASIC_ACTIONS.get(act, "NO_ACTION") for act in game_state["actions"]])
+        self._render_text(f"{actions_str}", (x_offset + 80, y_offset))
+        y_offset += gap
 
         # Render held piece
-        self._render_piece_preview(game_state["held_piece_name"], (x_offset + 80, 10), "Held")
+        self._render_piece_preview(game_state["held_piece_name"], (x_offset + 80, y_offset), "Held")
+        y_offset += gap
 
         # Render next piece
-        self._render_piece_preview(game_state["next_piece"], (x_offset, 130), "Next")
+        self._render_piece_preview(game_state["next_piece"], (x_offset, y_offset), "Next")
 
     def _render_text(self, text, pos):
         text_surface = self.font.render(text, True, (255, 255, 255))

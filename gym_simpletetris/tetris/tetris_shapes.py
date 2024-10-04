@@ -1,4 +1,5 @@
 import numpy as np
+from typing_extensions import deprecated
 
 # Adapted from the Tetris engine in the TetrisRL project by jaybutera
 # https://github.com/jaybutera/tetrisRL
@@ -25,21 +26,21 @@ OFF_BRAND_SHAPES = {  # RGB here is GBR
 }
 SHAPES = OG_SHAPES
 SHAPE_NAMES = tuple(SHAPES.keys())
-BASIC_ACTIONS = {
+BASIC_ACTIONS = {  # TODO MAKE THIS AN ENUM....
     0: "left",  # Move Left
     1: "right",  # Move Right
     2: "rotate_left",  # Rotate Left
     3: "rotate_right",  # Rotate Right
     4: "hold_swap",  # Hold/Swap
     5: "hard_drop",  # Hard Drop
-    # 6: "soft_drop",  # Soft Drop
+    6: "soft_drop",  # Soft Drop
     # 7: "idle",  # Idle
 }  # TODO for now lets not worry about soft dropping or idling until we get a model that can actually sorta play
 
 # List of valid action combinations based on Tetris engine logic
 # ? Can have more then one action as its a list of actions but for now lets just get
 #  ? the model clearing a line consistently
-ACTION_COMBINATIONS = {ii: [ii] for ii in BASIC_ACTIONS}
+ACTION_COMBINATIONS = {ii: [ii] for ii in BASIC_ACTIONS}  # TODO MAKE THIS AN ENUM....
 # ACTION_COMBINATIONS = {
 #     0: [0],  # left
 #     1: [1],  # right
@@ -54,7 +55,10 @@ ACTION_COMBINATIONS = {ii: [ii] for ii in BASIC_ACTIONS}
 #     10: [4, 5],  # hold_swap + hard_drop
 # }
 
+BASIC_ACTIONS_NAME_MAP = {name: action for action, name in BASIC_ACTIONS.items()}
 
+
+@deprecated("Not sure what is actually using this")
 def bitmask_to_actions(action_bitmask):
     """
     Converts a bitmask integer to a list of basic action indices.
