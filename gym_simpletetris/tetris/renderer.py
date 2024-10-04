@@ -104,7 +104,8 @@ class Renderer:
 
     def _render_ui(self, game_state):
 
-        actions_str = "\n".join([BASIC_ACTIONS[act] for act in game_state["actions"]])
+        # TODO MAKE THIS ABLE TO HANDLE LIST/COMBOS OF ACTIONS
+        actions_str = "\n".join([BASIC_ACTIONS.get(act, "NO_ACTION") for act in game_state["actions"]])
 
         x_offset = 2 * ((self.window_size - self.width * self.block_size) // 2)
         # Render score, lines, and level
