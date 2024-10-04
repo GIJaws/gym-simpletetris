@@ -74,8 +74,12 @@ class TetrisEngine:
         self._lock_delay = 0
         self._step_reset = step_reset
 
+        self.actions = [-99]
+        self.game_over = False
+        self.just_died = False
+
         self.prev_info = {}
-        self.actions = []
+        self.prev_info = self.get_info()
 
     def hold_swap(self, shape, anchor, board):
         # TODO make this functional so no side effects can occur to prevent future bugs
@@ -152,7 +156,14 @@ class TetrisEngine:
         return cleared_lines
 
     def _count_holes(self):
-        board = simplify_board(self.board)
+        # TODO check if board needs to be simplified instead of always simplifying
+        if self.board.ndim == 3:
+            board = simplify_board(self.board)
+        elif self.board.ndim == 2:
+            board = self.board
+        else:
+            raise ValueError("Invalid board shape. Expected 2D or 3D array.")
+
         holes = 0
 
         num_cols, num_rows = board.shape
@@ -167,20 +178,36 @@ class TetrisEngine:
         return holes
 
     def get_info(self):
-
-        lines_cleared_per_step = self.lines_cleared - self.prev_info.get("lines_cleared", 0)
-
+        simple_board = simplify_board(self.board)
         ghost_piece_anchor = self.get_ghost_piece_position()
+        lines_cleared_per_step = self.lines_cleared - self.prev_info.get("lines_cleared", 0)
+        ghost_piece_coords = TetrisEngine._get_coords(self.shape, ghost_piece_anchor, self.width, self.total_height)
+        current_piece_coords = TetrisEngine._get_coords(self.shape, ghost_piece_anchor, self.width, self.total_height)
+        float_board_state = TetrisEngine.create_float_board_state(
+            simple_board, current_piece_coords, ghost_piece_coords
+        )
+
+        settled_board = TetrisEngine.set_piece(
+            self.shape_name,
+            self.shape,
+            self.anchor,
+            simple_board,
+            self.width,
+            self.total_height,
+            on=False,
+            use_color=False,
+        )
+
+        heights = (TetrisEngine.get_column_heights(settled_board),)
+
         info = {
             "time": self.time,
             "current_piece": self.shape_name,
             "current_shape": self.shape,
             "anchor": (self.anchor[0], 40 - self.anchor[1]),
-            "current_piece_coords": TetrisEngine._get_coords(self.shape, self.anchor, self.width, self.total_height),
+            "current_piece_coords": current_piece_coords,
             "ghost_piece_anchor": (ghost_piece_anchor[0], 40 - ghost_piece_anchor[1]),
-            "ghost_piece_coords": TetrisEngine._get_coords(
-                self.shape, ghost_piece_anchor, self.width, self.total_height
-            ),
+            "ghost_piece_coords": ghost_piece_coords,
             "score": self.score,
             "total_lines_cleared": self.lines_cleared,
             "lines_cleared_per_step": lines_cleared_per_step,
@@ -188,6 +215,7 @@ class TetrisEngine:
             "old_holes": self.old_holes,
             "deaths": self.n_deaths,
             "lives_left": self.num_lives - self.n_deaths,
+            "lost_a_life": self.just_died,
             "statistics": self.shape_counts,
             "level": self.level,
             "gravity_interval": self.gravity_interval,
@@ -199,17 +227,15 @@ class TetrisEngine:
             "prev_info": self.prev_info,
             "actions": self.actions,
             "hold_used": self.hold_used,
-            "settled_board": TetrisEngine.set_piece(
-                self.shape_name,
-                self.shape,
-                self.anchor,
-                simplify_board(self.board),
-                self.width,
-                self.total_height,
-                on=False,
-                use_color=False,
-            ),
+            "settled_board": settled_board,
+            "float_board_state": float_board_state,
+            "simple_board": simple_board,
+            "heights": TetrisEngine.get_column_heights(settled_board),
+            "agg_height": np.sum(heights) / 200,
+            "game_over": self.game_over,
         }
+
+        self.just_died = False
 
         self.prev_info = info
 
@@ -269,12 +295,12 @@ class TetrisEngine:
                     reward += self.scoring_system.calculate_clear_reward(cleared_lines)
                     self.score += self.scoring_system.calculate_clear_reward(cleared_lines)
 
-                    game_over = False
+                    self.game_over = False
                     self.old_holes = self.holes
                     self.old_height = self.piece_height
                     self.holes = self._count_holes()
                     if np.any(self.board[:, : self.buffer_height]):
-                        game_over = True
+                        self.game_over = True
                     else:
                         new_height = sum(np.any(self.board, axis=0))
 
@@ -287,15 +313,16 @@ class TetrisEngine:
                         self._new_piece()
                         if TetrisEngine.is_occupied(self.shape, self.anchor, self.board):
 
-                            game_over = True
-                    if game_over:
+                            self.game_over = True
+                    if self.game_over:
                         self.n_deaths += 1
                         reward = -100
 
                         if self.n_deaths > self.num_lives:
                             done = True
                         else:
-                            self.clear()
+                            self.just_died = True
+                            self.clear()  # TODO having clear() called here is messing with the reward calculation with losing a life
 
         self._set_piece(True)
         state = np.copy(self.board)  # Ensure state being returned contains the current piece
@@ -332,6 +359,7 @@ class TetrisEngine:
         self.n_deaths = 0
         self._new_piece()
         self.board = np.zeros_like(self.board)
+        self.game_over = False
 
         self.level = self.initial_level
         self.lines_for_next_level = 10
@@ -509,6 +537,48 @@ class TetrisEngine:
     @staticmethod
     def idle(shape, anchor, board):
         return (shape, anchor)
+
+    @staticmethod
+    def get_column_heights(board):
+        non_zero_mask = board != 0
+        heights = board.shape[1] - np.argmax(non_zero_mask, axis=1)
+        return np.where(non_zero_mask.any(axis=1), heights, 0)
+
+    @staticmethod
+    def create_float_board_state(board, current_piece_coords, ghost_piece_coords):
+        """
+        Create a float board state with:
+        0 for no blocks
+        0.1 for ghost piece blocks
+        0.5 for placed blocks
+        1 for current piece blocks
+
+        Args:
+        board (np.array): The current board state (usually binary)
+        current_piece_coords (list of tuples): Coordinates of the current piece
+        ghost_piece_coords (list of tuples): Coordinates of the ghost piece
+
+        Returns:
+        np.array: Float board state
+        """
+        # Initialize the float board with zeros
+        float_board = np.zeros_like(board, dtype=np.float32)
+
+        # Set placed blocks to 0.5
+        float_board[board > 0] = 0.5
+
+        # Set ghost piece blocks to 0.1
+        for x, y in ghost_piece_coords:
+            if 0 <= x < float_board.shape[0] and 0 <= y < float_board.shape[1]:
+                if float_board[x, y] == 0:  # Only set if the cell is empty
+                    float_board[x, y] = 0.1
+
+        # Set current piece blocks to 1
+        for x, y in current_piece_coords:
+            if 0 <= x < float_board.shape[0] and 0 <= y < float_board.shape[1]:
+                float_board[x, y] = 1.0
+
+        return float_board
 
 
 class PieceQueue:
