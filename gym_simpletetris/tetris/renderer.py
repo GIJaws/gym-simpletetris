@@ -107,8 +107,9 @@ class Renderer:
         y_offset = 10
         gap = 30
         for key, value in [
-            ("is_finesse", game_state["is_finesse"]),
-            ("finesse_score", game_state["get_finesse_score"]),
+            ("is_current_finesse", game_state["is_current_finesse"]),
+            ("is_finesse_complete", game_state["is_finesse_complete"]),
+            ("current_finesse_score", game_state["current_finesse_score"]),
             ("Score", game_state["score"]),
             ("Lines", game_state["total_lines_cleared"]),
             ("Level", game_state["level"]),

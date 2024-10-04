@@ -33,6 +33,7 @@ class TetrisEnv(gym.Env):
         step_reset=False,
         initial_level=1,
         num_lives=1,
+        render_fps=60,
     ):
         self.obs_type = obs_type
         self.extend_dims = extend_dims
@@ -40,7 +41,7 @@ class TetrisEnv(gym.Env):
         self.render_mode = render_mode
 
         self.renderer = Renderer(
-            width, height, buffer_height, visible_height, self.render_mode, self.metadata["render_fps"], window_size
+            width, height, buffer_height, visible_height, self.render_mode, render_fps, window_size
         )
         self.engine = TetrisEngine(
             width=width,

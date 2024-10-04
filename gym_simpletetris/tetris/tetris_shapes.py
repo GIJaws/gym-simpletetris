@@ -34,7 +34,7 @@ BASIC_ACTIONS = {  # TODO MAKE THIS AN ENUM....
     4: "hold_swap",  # Hold/Swap
     5: "hard_drop",  # Hard Drop
     6: "soft_drop",  # Soft Drop
-    # 7: "idle",  # Idle
+    7: "idle",  # Idle
 }  # TODO for now lets not worry about soft dropping or idling until we get a model that can actually sorta play
 
 # List of valid action combinations based on Tetris engine logic
@@ -54,7 +54,7 @@ ACTION_COMBINATIONS = {ii: [ii] for ii in BASIC_ACTIONS}  # TODO MAKE THIS AN EN
 #     9: [3, 5],  # rotate_right + hard_drop
 #     10: [4, 5],  # hold_swap + hard_drop
 # }
-
+# TODO use the existing one lmao
 BASIC_ACTIONS_NAME_MAP = {name: action for action, name in BASIC_ACTIONS.items()}
 
 

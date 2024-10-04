@@ -1,7 +1,7 @@
 import random
 import numpy as np
 from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem, ScoringSystem
-from gym_simpletetris.tetris.tetris_shapes import BASIC_ACTIONS_NAME_MAP, SHAPE_NAMES, SHAPES, simplify_board
+from gym_simpletetris.tetris.tetris_shapes import ACTION_NAME_TO_INDEX, SHAPE_NAMES, SHAPES, simplify_board
 import math
 
 
@@ -48,6 +48,9 @@ class TetrisEngine:
         self.shape = None
         self.shape_name = None
         self.anchor = (np.nan, np.nan)
+        self.actions = [-99]
+        self.current_orientation = 0  # Initialize the current orientation
+        self.finesse_evaluator = FinesseEvaluator()
         self._new_piece()
 
         self.initial_level = initial_level
@@ -74,22 +77,17 @@ class TetrisEngine:
         self._lock_delay = 0
         self._step_reset = step_reset
 
-        self.actions = [-99]
-        self.action_history = []
-        self.is_finesse = True  # no actions means finesse is true
-        self.finesse_evaluator = FinesseEvaluator()
         self.game_over = False
         self.just_died = False
 
         self.prev_info = {}
         self.prev_info = self.get_info()
 
-    def hold_swap(self, shape, anchor, board):
+    def hold_swap(self, shape, anchor, board, current_orientation=None):
         # TODO make this functional so no side effects can occur to prevent future bugs
         # ! assume that shape, anchor, and board is the same as self
-
         if self.hold_used:
-            return self.shape, self.anchor  # Can't hold/swap again until next piece
+            return self.shape, self.anchor, current_orientation  # Can't hold/swap again until next piece
 
         self.hold_used = True
 
@@ -104,7 +102,12 @@ class TetrisEngine:
 
         # Reset the anchor to the spawn position
         self.anchor = self.get_spawn_position(self.shape)
-        return self.shape, self.anchor
+        current_orientation = 0  # Reset orientation after hold/swap
+
+        # Update the finesse evaluator with the new piece
+        self.finesse_evaluator.reset(self.shape_name, self.anchor)
+
+        return self.shape, self.anchor, current_orientation
 
     def _new_piece(self):
         # Spawn in the middle of the width, at the top of the height area
@@ -116,6 +119,9 @@ class TetrisEngine:
 
         # Use the new spawn position
         self.anchor = self.get_spawn_position(self.shape)
+        self.current_orientation = 0  # Reset orientation for new piece
+
+        self.finesse_evaluator.reset(self.shape_name, self.anchor)
 
     def get_spawn_position(self, shape):
         x_values = [i for i, j in shape]
@@ -236,8 +242,9 @@ class TetrisEngine:
             "heights": TetrisEngine.get_column_heights(settled_board),
             "agg_height": np.sum(heights) / 200,
             "game_over": self.game_over,
-            "is_finesse": self.is_finesse,
-            "get_finesse_score": self.finesse_evaluator.get_finesse_score(),
+            "is_current_finesse": self.finesse_evaluator.evaluate_finesse(self.anchor, self.current_orientation),
+            "is_finesse_complete": self.finesse_evaluator.finesse_complete,
+            "current_finesse_score": self.finesse_evaluator.get_finesse_score(self.anchor, self.current_orientation),
         }
 
         self.just_died = False
@@ -266,17 +273,37 @@ class TetrisEngine:
             7: 0,  # Idle (lowest priority)
         }
 
+        actions = sorted(actions, key=lambda action: action_priority[action])
         self.actions = actions
 
-        # Update action history
-        self.action_history.append(actions)
+        # is_finesse = [self.finesse_evaluator.evaluate_action(act) for act in actions]
 
-        self.is_finesse = all(self.finesse_evaluator.evaluate_action(act) for act in actions)
+        current_orientation = self.current_orientation  # Start with the current orientation
 
         # Process each action in the sorted order
-        for action in sorted(actions, key=lambda action: action_priority[action]):
+        for action in actions:
+
             self.anchor = (int(self.anchor[0]), int(self.anchor[1]))
-            self.shape, self.anchor = self.value_action_map[action](self.shape, self.anchor, self.board)
+            action_method = self.value_action_map[action]
+            max_orientations = self.finesse_evaluator.get_max_orientations(self.shape_name)
+
+            if action_method == self.hold_swap:
+                self.shape, self.anchor, current_orientation = action_method(
+                    self.shape, self.anchor, self.board, current_orientation=current_orientation
+                )
+            else:
+                self.shape, self.anchor, current_orientation = action_method(
+                    self.shape,
+                    self.anchor,
+                    self.board,
+                    current_orientation=current_orientation,
+                    max_orientations=max_orientations,
+                )
+
+            # Update the evaluator
+            self.finesse_evaluator.evaluate_action(action)
+
+        self.current_orientation = current_orientation  # Update the engine's orientation
 
         self.time += 1
         self.gravity_timer += 1
@@ -288,7 +315,7 @@ class TetrisEngine:
 
         if 5 in actions or self.gravity_timer >= self.gravity_interval and self.gravity_interval != float("inf"):
             self.gravity_timer = 0
-            self.shape, new_anchor = TetrisEngine.soft_drop(self.shape, self.anchor, self.board)
+            self.shape, new_anchor, current_orientation = TetrisEngine.soft_drop(self.shape, self.anchor, self.board)
             if self._step_reset and (self.anchor != new_anchor):
                 self._lock_delay = 0
 
@@ -320,7 +347,9 @@ class TetrisEngine:
                         # reward += self.scoring_system.calculate_holes_increase_penalty(self.holes, self.old_holes)
 
                         self.piece_height = new_height
+                        self.finesse_evaluator.piece_placed(self.anchor, self.current_orientation)
                         self._new_piece()
+
                         if TetrisEngine.is_occupied(self.shape, self.anchor, self.board):
 
                             self.game_over = True
@@ -346,6 +375,7 @@ class TetrisEngine:
         self.old_holes = self.holes
 
         self._new_piece()
+
         self.board = np.zeros_like(self.board)
         self.num_lives = self.og_num_lives
 
@@ -355,16 +385,13 @@ class TetrisEngine:
         self.gravity_timer = 0
         self.piece_timer = 0
 
-        self.action_history = []
-        self.is_finesse = True  # no actions means finesse is true
-
-        self.finesse_evaluator.reset()
         self.prev_info = {}
         self.prev_info = self.get_info()
 
         return self.board
 
     def reset(self):
+
         self.time = 0
         self.score = 0
         self.holes = 0
@@ -373,6 +400,7 @@ class TetrisEngine:
         self.old_holes = self.holes
         self.n_deaths = 0
         self._new_piece()
+
         self.board = np.zeros_like(self.board)
         self.game_over = False
 
@@ -382,10 +410,6 @@ class TetrisEngine:
         self.gravity_timer = 0
         self.piece_timer = 0
 
-        self.action_history = []
-        self.is_finesse = True  # no actions means finesse is true
-
-        self.finesse_evaluator.reset()
         self.prev_info = {}
         self.prev_info = self.get_info()
 
@@ -522,40 +546,58 @@ class TetrisEngine:
         return False
 
     @staticmethod
-    def left(shape, anchor, board):
+    def left(shape, anchor, board, current_orientation=None, max_orientations=None):
         new_anchor = (anchor[0] - 1, anchor[1])
-        return (shape, anchor) if TetrisEngine.is_occupied(shape, new_anchor, board) else (shape, new_anchor)
+        if TetrisEngine.is_occupied(shape, new_anchor, board):
+            return shape, anchor, current_orientation
+        else:
+            return shape, new_anchor, current_orientation
 
     @staticmethod
-    def right(shape, anchor, board):
+    def right(shape, anchor, board, current_orientation=None, max_orientations=None):
         new_anchor = (anchor[0] + 1, anchor[1])
-
-        return (shape, anchor) if TetrisEngine.is_occupied(shape, new_anchor, board) else (shape, new_anchor)
+        if TetrisEngine.is_occupied(shape, new_anchor, board):
+            return shape, anchor, current_orientation
+        else:
+            return shape, new_anchor, current_orientation
 
     @staticmethod
-    def soft_drop(shape, anchor, board):
+    def soft_drop(shape, anchor, board, current_orientation=None, max_orientations=None):
         new_anchor = (anchor[0], anchor[1] + 1)
-        return (shape, anchor) if TetrisEngine.is_occupied(shape, new_anchor, board) else (shape, new_anchor)
+        if TetrisEngine.is_occupied(shape, new_anchor, board):
+            return shape, anchor, current_orientation
+        else:
+            return shape, new_anchor, current_orientation
 
     @staticmethod
-    def hard_drop(shape, anchor, board):
+    def hard_drop(shape, anchor, board, current_orientation=None, max_orientations=None):
         while not TetrisEngine.is_occupied(shape, (anchor[0], anchor[1] + 1), board):
             anchor = (anchor[0], anchor[1] + 1)
-        return shape, anchor
+        return shape, anchor, current_orientation
 
     @staticmethod
-    def rotate_left(shape, anchor, board):
+    def rotate_left(shape, anchor, board, current_orientation=None, max_orientations=None):
         new_shape = TetrisEngine.rotated(shape, cclk=False)
-        return (shape, anchor) if TetrisEngine.is_occupied(new_shape, anchor, board) else (new_shape, anchor)
+        if TetrisEngine.is_occupied(new_shape, anchor, board):
+            return shape, anchor, current_orientation
+        else:
+            if current_orientation is not None and max_orientations is not None:
+                current_orientation = (current_orientation - 1) % max_orientations
+            return new_shape, anchor, current_orientation
 
     @staticmethod
-    def rotate_right(shape, anchor, board):
+    def rotate_right(shape, anchor, board, current_orientation=None, max_orientations=None):
         new_shape = TetrisEngine.rotated(shape, cclk=True)
-        return (shape, anchor) if TetrisEngine.is_occupied(new_shape, anchor, board) else (new_shape, anchor)
+        if TetrisEngine.is_occupied(new_shape, anchor, board):
+            return shape, anchor, current_orientation
+        else:
+            if current_orientation is not None and max_orientations is not None:
+                current_orientation = (current_orientation + 1) % max_orientations
+            return new_shape, anchor, current_orientation
 
     @staticmethod
-    def idle(shape, anchor, board):
-        return (shape, anchor)
+    def idle(shape, anchor, board, current_orientation=None, max_orientations=None):
+        return shape, anchor, current_orientation
 
     @staticmethod
     def get_column_heights(board):
@@ -631,84 +673,230 @@ class PieceQueue:
 
 class FinesseEvaluator:
     def __init__(self):
-        self.rotation_actions = {BASIC_ACTIONS_NAME_MAP["rotate_left"], BASIC_ACTIONS_NAME_MAP["rotate_right"]}
-        self.translation_actions = {BASIC_ACTIONS_NAME_MAP["left"], BASIC_ACTIONS_NAME_MAP["right"]}
-        self.hard_drop_action = BASIC_ACTIONS_NAME_MAP["hard_drop"]
-        self.reset()
+        """
+        Initialize the FinesseEvaluator.
 
-    def reset(self):
-        self.actions = []
-        self.rotation_phase = True
-        self.translation_phase = False
-        self.hard_drop_phase = False
+        This evaluator tracks the player's actions and determines whether they are making optimal moves (finesse)
+        by comparing the actual moves to the minimal required moves to place a piece from its spawn position to its final position.
+        """
+        self.rotation_actions = {
+            ACTION_NAME_TO_INDEX["rotate_left"],
+            ACTION_NAME_TO_INDEX["rotate_right"],
+        }
+        self.translation_actions = {
+            ACTION_NAME_TO_INDEX["left"],
+            ACTION_NAME_TO_INDEX["right"],
+        }
+        self.hard_drop_action = ACTION_NAME_TO_INDEX["hard_drop"]
+        self.hold_swap_action = ACTION_NAME_TO_INDEX["hold_swap"]
+        self.idle_action = ACTION_NAME_TO_INDEX.get("idle", 7)
+        self.spawn_position = None
+        # self.reset()
+
+    def reset(self, piece_name, spawn_position):
+        """
+        Resets the state of the finesse evaluator.
+
+        Call this method to start tracking a new sequence of actions for finesse evaluation.
+        """
+        self.current_actions = []
+
+        # TODO should is_current_finesse be default to True???
+
+        self.is_current_finesse = True  # Checks if the current sequence of actions is considered finesse.
+        self.finesse_complete = False  # Check if the current sequence of actions completes a finesse move.
+
+        self.hold_swap_used = False
+        self.last_action_was_hold_swap = False
+
+        # New variables for tracking positions and orientations
+        self.piece_name = piece_name
+        self.spawn_position = spawn_position
+        self.current_position = self.spawn_position
+        self.spawn_orientation = 0  # Assuming initial orientation is 0
+        self.current_orientation = self.spawn_orientation
+        self.cumulative_translation = 0
+        self.cumulative_rotation = 0
 
     def evaluate_action(self, action: int) -> bool:
-        """Evaluate a single action for finesse.
-
-        Args:
-        action (int): The action to evaluate
-
-        Returns:
-        bool: True if the action maintains finesse, False otherwise
         """
-        self.actions.append(action)
+        Evaluates whether the given action is part of a finesse move.
+
+        Returns True if the action is consistent with finesse, False otherwise.
+        """
+        if self.finesse_complete or self.idle_action == action:
+            # If the piece is already placed or an idle action, ignore further actions
+            return self.is_current_finesse
+
+        print(f"Evaluating action: {action}")
+        self.current_actions.append(action)
+
+        if action == self.hold_swap_action:
+            # If hold/swap was not used before and previous action was not hold/swap
+            if not self.hold_swap_used and not self.last_action_was_hold_swap:
+                self.hold_swap_used = True
+                self.last_action_was_hold_swap = True
+                # Hold/swap is considered finesse under these conditions
+            else:
+                # Multiple hold/swaps in a row are not finesse
+                self.is_current_finesse = False
+                self.last_action_was_hold_swap = True
+
+            print(f"{self.is_current_finesse=}")
+            return self.is_current_finesse
+        else:
+            self.last_action_was_hold_swap = False
+
+        minimal_rotation = self.calculate_minimal_rotation(
+            self.spawn_orientation, self.current_orientation, self.piece_name
+        )
+        minimal_translation = abs(self.current_position[0] - self.spawn_position[0])
 
         if action in self.rotation_actions:
-            if self.translation_phase or self.hard_drop_phase:
-                return False
+            # Update current orientation
+            if action == ACTION_NAME_TO_INDEX["rotate_left"]:
+                self.current_orientation = (self.current_orientation - 1) % self.get_max_orientations(self.piece_name)
+            elif action == ACTION_NAME_TO_INDEX["rotate_right"]:
+                self.current_orientation = (self.current_orientation + 1) % self.get_max_orientations(self.piece_name)
+
+            self.cumulative_rotation += 1
+
         elif action in self.translation_actions:
-            if self.hard_drop_phase:
-                return False
-            self.rotation_phase = False
-            self.translation_phase = True
+            # Update current position
+            if action == ACTION_NAME_TO_INDEX["left"]:
+                self.current_position = (self.current_position[0] - 1, self.current_position[1])
+            elif action == ACTION_NAME_TO_INDEX["right"]:
+                self.current_position = (self.current_position[0] + 1, self.current_position[1])
+
+            self.cumulative_translation += 1
+
         elif action == self.hard_drop_action:
-            self.hard_drop_phase = True
+            self.finesse_complete = True
+        elif action == self.idle_action:
+            pass  # Idle actions don't affect finesse
         else:
-            return False  # Unknown action
+            # Any other action (e.g., soft drop) is considered in the evaluation
+            self.is_current_finesse = False
 
-        return True
+        if not self.is_current_finesse:
+            print("Unnecessary action performed. Finesse failed.")
 
-    def is_finesse_complete(self) -> bool:
-        """Check if the current sequence of actions completes a finesse move."""
-        return self.hard_drop_phase
+        print(f"{self.is_current_finesse=}")
 
-    def get_finesse_score(self) -> float:
-        """Calculate a finesse score for the current sequence of actions.
+        # No need to check thresholds here; evaluation is done after placement
+        return self.is_current_finesse
+
+    def piece_placed(self, final_position, final_orientation):
+        """
+        Called when a piece has been placed.
+
+        Parameters:
+            final_position (tuple): The final position (x, y) of the piece.
+            final_orientation (int): The final orientation index of the piece.
+        """
+        print(f"Piece placed at position: {final_position}, orientation: {final_orientation}")
+        print(f"Actions taken: {self.current_actions}")
+        self.finesse_complete = True
+        self.evaluate_finesse(final_position, final_orientation)
+
+    def evaluate_finesse(self, final_position, final_orientation):
+        """
+        Evaluates the finesse of the current sequence of actions.
+
+        Sets `self.is_current_finesse` to False if unnecessary moves were made.
+        """
+        # Calculate minimal required moves
+        print(f"{final_position=}, {self.spawn_position=}")
+        minimal_translation = abs(final_position[0] - self.spawn_position[0])
+        minimal_rotation = self.calculate_minimal_rotation(self.spawn_orientation, final_orientation, self.piece_name)
+
+        # Minimal actions include minimal translations, rotations, and hard drop
+        minimal_actions = minimal_translation + minimal_rotation + 1  # +1 for hard drop
+        if self.hold_swap_used:
+            minimal_actions += 1  # Include hold/swap in minimal actions
+
+        # Actual actions taken (excluding idle actions)
+        total_actions = len([a for a in self.current_actions if a != self.idle_action])
+
+        if total_actions > minimal_actions:
+            self.is_current_finesse = False
+
+        print(f"Minimal translation: {minimal_translation}")
+        print(f"Minimal rotation: {minimal_rotation}")
+        print(f"Minimal actions required: {minimal_actions}")
+        print(f"Total actions taken (excluding idle): {total_actions}")
+        print(f"Is current finesse: {self.is_current_finesse}")
+
+        return self.is_current_finesse
+
+    def calculate_minimal_rotation(self, start_orientation, end_orientation, piece_name):
+        """
+        Calculates the minimal number of rotations required to get from the start orientation to the end orientation.
+
+        Parameters:
+            start_orientation (int): The starting orientation index.
+            end_orientation (int): The ending orientation index.
+            piece_name (str): The name of the piece.
 
         Returns:
-        float: A score between 0 and 1, where 1 is perfect finesse.
+            int: Minimal number of rotations required.
         """
-        if not self.actions:
-            return 0.0
+        max_orientations = self.get_max_orientations(piece_name)
+        rotation_diff = (end_orientation - start_orientation) % max_orientations
+        minimal_rotation = min(rotation_diff, max_orientations - rotation_diff)
+        return minimal_rotation
 
-        score = 1.0
+    def get_max_orientations(self, piece_name):
+        """
+        Returns the number of unique orientations for a given piece.
 
-        # Penalize for rotations after translations
-        if any(action in self.rotation_actions for action in self.actions[1:]):
-            score *= 0.8
-
-        # Penalize for not ending with a hard drop
-        if self.actions[-1] != self.hard_drop_action:
-            score *= 0.7
-
-        # Slight penalty for each action, encouraging efficiency
-        score *= 0.98 ** len(self.actions)
-
-        return score
-
-    @staticmethod
-    def check_finesse_approx(actions: list[list[int]]) -> bool:
-        """Check if the given actions are close to optimal according to the Finesse criteria
-
-        Args:
-        actions (list[list[int]]): The actions to check
+        Parameters:
+            piece_name (str): The name of the piece.
 
         Returns:
-        bool: True if the actions are close to optimal according to the Finesse criteria, False otherwise
+            int: Number of unique orientations.
         """
-        evaluator = FinesseEvaluator()
-        for action_group in actions:
-            for action in action_group:
-                if not evaluator.evaluate_action(action):
-                    return False
-        return evaluator.is_finesse_complete()
+        # O-piece has only 1 orientation; other pieces have 4 or 2
+        if piece_name == "O":
+            return 1
+        elif piece_name in ["I", "S", "Z"]:
+            return 2  # These pieces have 2 unique orientations
+        else:
+            return 4
+
+    def get_finesse_score(self, final_position, final_orientation) -> float:
+        """
+        Calculate a finesse score for the current sequence of actions.
+
+        Returns:
+            float: A score between 0 and 1, where 1 is perfect finesse and 0 is the worst.
+        """
+        if not self.finesse_complete:
+            # Estimate minimal actions up to the current state
+            minimal_translation = abs(final_position[0] - self.spawn_position[0])
+            minimal_rotation = self.calculate_minimal_rotation(
+                self.spawn_orientation, final_orientation, self.piece_name
+            )
+            minimal_actions = minimal_translation + minimal_rotation
+            if self.hold_swap_used:
+                minimal_actions += 1
+
+            # Actual actions taken so far (excluding idle)
+            total_actions = len([a for a in self.current_actions if a != self.idle_action])
+
+            finesse_score = minimal_actions / total_actions if total_actions > 0 else 0.0
+            return max(0.0, min(finesse_score, 1.0))
+
+        # Recalculate minimal required actions
+        minimal_translation = abs(final_position[0] - self.spawn_position[0])
+        minimal_rotation = self.calculate_minimal_rotation(self.spawn_orientation, final_orientation, self.piece_name)
+        minimal_actions = minimal_translation + minimal_rotation + 1  # +1 for hard drop
+        if self.hold_swap_used:
+            minimal_actions += 1
+
+        # Actual actions taken (excluding idle actions)
+        total_actions = len([a for a in self.current_actions if a != self.idle_action])
+
+        finesse_score = minimal_actions / total_actions if total_actions > 0 else 0.0
+        print(f"Finesse score calculated: {finesse_score}")
+        return max(0.0, min(finesse_score, 1.0))
