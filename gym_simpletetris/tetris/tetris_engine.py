@@ -54,7 +54,7 @@ class TetrisEngine:
         self.finesse_evaluator = FinesseEvaluator(self.anchor, self.shape_name)
         self.is_current_finesse = True
 
-        self.current_finesse_score = 0
+        # self.current_finesse_score = 0
         self._new_piece()
 
         self.initial_level = initial_level
@@ -87,7 +87,7 @@ class TetrisEngine:
         self.prev_info = {}
         self.prev_info = self.get_info()
 
-    def hold_swap(self, shape, anchor, board, current_orientation):
+    def hold_swap(self, shape, anchor, board, current_orientation, max_orientations=None):
         # TODO make this functional so no side effects can occur to prevent future bugs
         # ! assume that shape, anchor, and board is the same as self
         if self.hold_used:
@@ -248,12 +248,12 @@ class TetrisEngine:
             "settled_board": settled_board,
             "float_board_state": float_board_state,
             "simple_board": simple_board,
-            "heights": TetrisEngine.get_column_heights(settled_board),
+            "heights": heights,
             "agg_height": np.sum(heights) / 200,
             "game_over": self.game_over,
             "is_current_finesse": self.is_current_finesse,
             "is_finesse_complete": self.finesse_evaluator.finesse_complete,
-            "current_finesse_score": self.current_finesse_score,
+            # "current_finesse_score": self.current_finesse_score,
         }
 
         self.just_died = False
@@ -373,7 +373,9 @@ class TetrisEngine:
         else:
             self.is_current_finesse = self.finesse_evaluator.evaluate_finesse(self.anchor, self.current_orientation)
 
-        self.current_finesse_score = self.finesse_evaluator.get_finesse_score(self.anchor, self.current_orientation)
+            # self.current_finesse_score = self.finesse_evaluator.get_finesse_score(
+            #     self.anchor, self.current_orientation
+            # )
         self._set_piece(True)
         state = np.copy(self.board)  # Ensure state being returned contains the current piece
         self._set_piece(False)

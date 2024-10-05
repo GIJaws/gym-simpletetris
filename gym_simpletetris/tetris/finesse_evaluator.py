@@ -140,10 +140,6 @@ class FinesseEvaluator:
         total_actions = len([a for a in self.current_actions if a != self.idle_action])
 
         self.is_current_finesse = total_actions <= minimal_actions
-        print(f"{self.is_current_finesse=}")
-
-        # if not self.is_current_finesse:
-        #     breakpoint()
 
         return self.is_current_finesse
 

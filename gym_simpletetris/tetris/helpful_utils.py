@@ -1,5 +1,8 @@
+import numpy as np
+
+
 def format_value(v):
-    if isinstance(v, (list, tuple)):
+    if isinstance(v, (list, tuple, np.ndarray)):
         return ", ".join([format_value(x) for x in v])
     elif isinstance(v, dict):
         return ", ".join([f"{k}={format_value(v)}" for k, v in v.items()])
