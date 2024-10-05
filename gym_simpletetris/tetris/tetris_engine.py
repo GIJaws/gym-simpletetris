@@ -2,7 +2,14 @@ import random
 import numpy as np
 from gym_simpletetris.tetris.finesse_evaluator import FinesseEvaluator
 from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem, ScoringSystem
-from gym_simpletetris.tetris.tetris_shapes import ACTION_NAME_TO_INDEX, SHAPE_NAMES, SHAPES, simplify_board
+from gym_simpletetris.tetris.tetris_shapes import (
+    ACTION_NAME_TO_INDEX,
+    SHAPE_NAMES,
+    SHAPES,
+    simplify_board,
+    BASIC_ACTIONS,
+    ACTION_COMBINATIONS,
+)
 import math
 
 
@@ -54,7 +61,6 @@ class TetrisEngine:
         self.finesse_evaluator = FinesseEvaluator(self.anchor, self.shape_name)
         self.is_current_finesse = True
 
-        # self.current_finesse_score = 0
         self._new_piece()
 
         self.initial_level = initial_level
@@ -83,6 +89,10 @@ class TetrisEngine:
 
         self.game_over = False
         self.just_died = False
+
+        self.target_position = None  # Target position for the current piece
+        self.planned_actions = []  # Actions planned to reach the target
+        self.prev_actions = []
 
         self.prev_info = {}
         self.prev_info = self.get_info()
@@ -173,12 +183,13 @@ class TetrisEngine:
 
         return cleared_lines
 
-    def _count_holes(self):
-        # TODO check if board needs to be simplified instead of always simplifying
-        if self.board.ndim == 3:
-            board = simplify_board(self.board)
-        elif self.board.ndim == 2:
-            board = self.board
+    def _count_holes(self, board=None):
+        board = board if board is not None else self.board
+        # Simplify the board if needed
+        if board.ndim == 3:
+            board = simplify_board(board)
+        elif board.ndim == 2:
+            board = board
         else:
             raise ValueError("Invalid board shape. Expected 2D or 3D array.")
 
@@ -186,13 +197,12 @@ class TetrisEngine:
 
         num_cols, num_rows = board.shape
         for col in range(num_cols):
-            block_found = False
-            for row in range(num_rows):
-                cell = board[col, row]
-                if cell != 0:
-                    block_found = True
-                elif block_found and cell == 0:
-                    holes += 1
+            col_data = board[col, :]
+            filled_indices = np.where(col_data != 0)[0]
+            if len(filled_indices) == 0:
+                continue  # No filled cells in this column
+            highest_filled_row = filled_indices[0]
+            holes += np.sum(col_data[highest_filled_row + 1 :] == 0)
         return holes
 
     def get_info(self):
@@ -200,7 +210,7 @@ class TetrisEngine:
         ghost_piece_anchor = self.get_ghost_piece_position()
         lines_cleared_per_step = self.lines_cleared - self.prev_info.get("lines_cleared", 0)
         ghost_piece_coords = TetrisEngine._get_coords(self.shape, ghost_piece_anchor, self.width, self.total_height)
-        current_piece_coords = TetrisEngine._get_coords(self.shape, ghost_piece_anchor, self.width, self.total_height)
+        current_piece_coords = TetrisEngine._get_coords(self.shape, self.anchor, self.width, self.total_height)
         float_board_state = TetrisEngine.create_float_board_state(
             simple_board, current_piece_coords, ghost_piece_coords
         )
@@ -216,7 +226,8 @@ class TetrisEngine:
             use_color=False,
         )
 
-        heights = (TetrisEngine.get_column_heights(settled_board),)
+        heights = TetrisEngine.get_column_heights(settled_board)
+        random_valid_move = self.get_random_valid_move()  # Include the random move in the info dict
 
         info = {
             "time": self.time,
@@ -249,10 +260,13 @@ class TetrisEngine:
             "float_board_state": float_board_state,
             "simple_board": simple_board,
             "heights": heights,
-            "agg_height": np.sum(heights) / 200,
+            "bumpiness": np.sum(np.abs(np.diff(heights))),
+            "agg_height": np.sum(heights),
             "game_over": self.game_over,
             "is_current_finesse": self.is_current_finesse,
             "is_finesse_complete": self.finesse_evaluator.finesse_complete,
+            "random_valid_move": random_valid_move,  # Include the random move in the info dict
+            "random_valid_move_str": BASIC_ACTIONS[random_valid_move],
             # "current_finesse_score": self.current_finesse_score,
         }
 
@@ -284,8 +298,6 @@ class TetrisEngine:
 
         actions = sorted(actions, key=lambda action: action_priority[action])
         self.actions = actions
-
-        # is_finesse = [self.finesse_evaluator.evaluate_action(act) for act in actions]
 
         current_orientation = self.current_orientation  # Start with the current orientation
 
@@ -373,9 +385,6 @@ class TetrisEngine:
         else:
             self.is_current_finesse = self.finesse_evaluator.evaluate_finesse(self.anchor, self.current_orientation)
 
-            # self.current_finesse_score = self.finesse_evaluator.get_finesse_score(
-            #     self.anchor, self.current_orientation
-            # )
         self._set_piece(True)
         state = np.copy(self.board)  # Ensure state being returned contains the current piece
         self._set_piece(False)
@@ -443,8 +452,6 @@ class TetrisEngine:
 
         # Add ghost piece
         ghost_anchor = self.get_ghost_piece_position()
-
-        # print(f"{ghost_anchor=}, {self.anchor=}")
 
         ghost_color = tuple(min(255, c + 70) for c in SHAPES[self.shape_name]["color"])  # Lighter color
 
@@ -535,7 +542,7 @@ class TetrisEngine:
     def __repr__(self):
         self._set_piece(True)
         s = "o" + "-" * self.width + "o\n"
-        s += "\n".join(["|" + "".join(["X" if j else " " for j in i]) + "|" for i in self.board.T])
+        s += "\n".join(["|" + "".join(["X" if j.any() else " " for j in i]) + "|" for i in self.board.T])
         s += "\no" + "-" * self.width + "o"
         self._set_piece(False)
         return s
@@ -552,7 +559,7 @@ class TetrisEngine:
         for i, j in shape:
             x = anchor[0] + i
             y = anchor[1] + j
-            if x < 0 or x >= board.shape[0] or y >= board.shape[1]:
+            if x < 0 or x >= board.shape[0] or y < 0 or y >= board.shape[1]:
                 return True  # Out of bounds
             if np.any(board[x, y]):
                 return True  # Position already occupied
@@ -615,7 +622,7 @@ class TetrisEngine:
     @staticmethod
     def get_column_heights(board):
         non_zero_mask = board != 0
-        heights = board.shape[1] - np.argmax(non_zero_mask, axis=1)
+        heights = board.shape[1] - np.argmax(non_zero_mask[:, ::-1], axis=1) - 1
         return np.where(non_zero_mask.any(axis=1), heights, 0)
 
     @staticmethod
@@ -653,6 +660,209 @@ class TetrisEngine:
                 float_board[x, y] = 1.0
 
         return float_board
+
+    def _count_lines_to_clear(self, board):
+        """
+        Count how many lines can be cleared with the current board.
+        """
+        non_zero_cells = np.any(board != 0, axis=1)
+        can_clear = np.all(non_zero_cells, axis=0)  # Shape: (total_height,)
+        return np.sum(can_clear)
+
+    def get_random_valid_move(self):
+        """
+        Refactored get_random_valid_move to choose a target spot on the board where the current piece should be placed,
+        use the previous actions and the current state to make decisions toward that target, and after the piece is placed,
+        choose a new target spot and repeat the process.
+        """
+        # If we have no planned actions, we need to choose a new target and plan
+        if not self.planned_actions:
+            self._choose_target_position()
+            self.planned_actions = self._find_path_to_target()
+            self.prev_actions = []
+
+        if self.planned_actions:
+            # Get the next action in the planned sequence
+            action = self.planned_actions.pop(0)
+            self.prev_actions.append(action)
+            return action
+        else:
+            # If no actions are planned, default to idle or a random action
+            return random.choice(list(ACTION_COMBINATIONS.keys()))
+
+    def _choose_target_position(self):
+        """
+        Choose a target position on the board where the current piece should be placed.
+        """
+        # Generate all possible final positions for the current piece
+        placements = self._generate_possible_placements()
+        best_score = float("-inf")
+        best_placement = None
+
+        # Evaluate each possible placement using a heuristic
+        for placement in placements:
+            simulated_board = self.simulate_placement(placement)
+            score = self.evaluate_board(simulated_board)
+            if score > best_score:
+                best_score = score
+                best_placement = placement
+
+        # Set the target position to the best placement found
+        self.target_position = best_placement
+
+    def _generate_possible_placements(self):
+        """
+        Generate all possible final positions (placements) for the current piece.
+        """
+        placements = []
+        board = simplify_board(self.board)
+
+        for orientation in range(4):
+            # Rotate the shape to the desired orientation
+            rotated_shape = self.shape
+            for _ in range((orientation - self.current_orientation) % 4):
+                rotated_shape = TetrisEngine.rotated(rotated_shape, cclk=True)
+
+            # Get the min and max x positions for the rotated shape
+            min_i = min([i for i, j in rotated_shape])
+            max_i = max([i for i, j in rotated_shape])
+            min_x = -min_i
+            max_x = self.width - max_i - 1
+
+            for x in range(min_x, max_x + 1):
+                y = 0
+                # Drop the piece down until it cannot go further
+                while not TetrisEngine.is_occupied(rotated_shape, (x, y + 1), board):
+                    y += 1
+                # Record the placement
+                placements.append({"x": x, "y": y, "orientation": orientation, "shape": rotated_shape})
+
+        return placements
+
+    def simulate_placement(self, placement):
+        """
+        Simulate placing the piece at the given placement and return the resulting board.
+        """
+        # Copy the current board
+        board_copy = np.copy(self.board)
+        # Place the piece
+        anchor = (placement["x"], placement["y"])
+        board_copy = TetrisEngine.set_piece(
+            self.shape_name,
+            placement["shape"],
+            anchor,
+            board_copy,
+            self.width,
+            self.total_height,
+            on=True,
+            use_color=False,
+        )
+        # Simulate clearing lines
+        board_copy = self.simulate_clear_lines(board_copy)
+        return board_copy
+
+    def simulate_clear_lines(self, board):
+        """
+        Simulate clearing lines in the board.
+        """
+        non_zero_cells = board != 0
+        can_clear = np.all(non_zero_cells, axis=0)
+        rows_to_keep = [y for y in range(board.shape[1]) if not can_clear[y].all()]
+        new_board = np.zeros_like(board)
+        j = board.shape[1] - 1  # Index in new_board
+
+        for y in reversed(rows_to_keep):
+            new_board[:, j] = board[:, y]
+            j -= 1
+
+        return new_board
+
+    def evaluate_board(self, board):
+        """
+        Evaluate the board using a heuristic function.
+        """
+        # Simplify the board if needed
+        if board.ndim == 3:
+            board = simplify_board(board)
+
+        holes = self._count_holes(board)
+        heights = TetrisEngine.get_column_heights(board)
+        aggregate_height = np.sum(heights)
+        bumpiness = np.sum(np.abs(np.diff(heights)))
+        lines_cleared = self._count_lines_to_clear(board)
+
+        # Heuristic scoring
+        score = 0
+        score += lines_cleared * 10
+        score -= aggregate_height * 0.5
+        score -= holes * 1.0
+        score -= bumpiness * 0.5
+
+        return score
+
+    def _find_path_to_target(self):
+        """
+        Find the sequence of actions to reach the target position from the current state.
+        """
+        from collections import deque
+
+        # Define possible moves
+        moves = [
+            (ACTION_NAME_TO_INDEX["left"], TetrisEngine.left),
+            (ACTION_NAME_TO_INDEX["right"], TetrisEngine.right),
+            (ACTION_NAME_TO_INDEX["rotate_left"], TetrisEngine.rotate_left),
+            (ACTION_NAME_TO_INDEX["rotate_right"], TetrisEngine.rotate_right),
+            # (ACTION_NAME_TO_INDEX["soft_drop"], TetrisEngine.soft_drop),
+            (ACTION_NAME_TO_INDEX["hard_drop"], TetrisEngine.hard_drop),
+        ]
+
+        # State: (x, y, orientation)
+        start_state = (self.anchor[0], self.anchor[1], self.current_orientation)
+        target_state = (self.target_position["x"], self.target_position["y"], self.target_position["orientation"])
+
+        queue = deque()
+        queue.append((start_state, []))
+        visited = set()
+        visited.add(start_state)
+
+        while queue:
+            (x, y, orientation), actions = queue.popleft()
+
+            if (x, y, orientation) == target_state:
+                return actions + [ACTION_NAME_TO_INDEX["hard_drop"]]  # Finish with hard drop
+
+            for action_value, action_method in moves:
+                new_shape = self.shape
+                new_orientation = orientation
+                # Apply the action
+                if action_method == TetrisEngine.left:
+                    new_x, new_y = x - 1, y
+                elif action_method == TetrisEngine.right:
+                    new_x, new_y = x + 1, y
+                elif action_method == TetrisEngine.rotate_left:
+                    new_shape = TetrisEngine.rotated(new_shape, cclk=False)
+                    new_x, new_y = x, y
+                    new_orientation = (orientation - 1) % 4
+                elif action_method == TetrisEngine.rotate_right:
+                    new_shape = TetrisEngine.rotated(new_shape, cclk=True)
+                    new_x, new_y = x, y
+                    new_orientation = (orientation + 1) % 4
+                elif action_method == TetrisEngine.soft_drop:
+                    new_x, new_y = x, y + 1
+                else:
+                    continue  # Skip other actions
+
+                # Check if new position is valid
+                if TetrisEngine.is_occupied(new_shape, (new_x, new_y), simplify_board(self.board)):
+                    continue
+
+                new_state = (new_x, new_y, new_orientation)
+                if new_state not in visited:
+                    visited.add(new_state)
+                    queue.append((new_state, actions + [action_value]))
+
+        # If no path found, return an empty list
+        return []
 
 
 class PieceQueue:
