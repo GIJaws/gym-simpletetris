@@ -1,3 +1,4 @@
+import dataclasses
 import random
 import numpy as np
 from gym_simpletetris.tetris.finesse_evaluator import FinesseEvaluator
@@ -12,6 +13,409 @@ from gym_simpletetris.tetris.tetris_shapes import (
 )
 import math
 import heapq
+
+from dataclasses import dataclass
+
+from enum import Enum, auto
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+from functools import total_ordering
+
+
+@total_ordering
+class Action(ABC):
+    @abstractmethod
+    def apply(self, state: "GameState") -> "GameState":
+        """Apply the action to the game state and return a new game state."""
+        pass
+
+    @property
+    @abstractmethod
+    def priority(self) -> int:
+        """Return the priority of the action."""
+        pass
+
+    # Define the less-than comparison based on priority
+    def __lt__(self, other: "Action") -> bool:
+        return self.priority < other.priority
+
+    # Define equality based on priority
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Action):
+            return False
+        return self.priority == other.priority
+
+
+@dataclass(frozen=True)
+class MoveLeft(Action):
+    @property
+    def priority(self) -> int:
+        return 1
+
+    def apply(self, state: "GameState") -> "GameState":
+        piece = Piece.move(state.current_piece, dx=-1, dy=0)
+        if GameState._collision(piece, state.board):
+            # Undo move by not changing the piece
+            return state
+        return dataclasses.replace(state, **{"current_piece": piece})
+
+
+@dataclass(frozen=True)
+class MoveRight(Action):
+    @property
+    def priority(self) -> int:
+        return 1
+
+    def apply(self, state: "GameState") -> "GameState":
+        piece = Piece.move(state.current_piece, dx=1, dy=0)
+        if GameState._collision(piece, state.board):
+            # Undo move by not changing the piece
+            return state
+        return dataclasses.replace(state, **{"current_piece": piece})
+
+
+@dataclass(frozen=True)
+class RotateLeft(Action):
+    @property
+    def priority(self) -> int:
+        return 1
+
+    def apply(self, state: "GameState") -> "GameState":
+        piece = Piece.rotate(state.current_piece, direction="left", board=state.board)
+        if GameState._collision(piece, state.board):
+            # Undo move by not changing the piece
+            return state
+        return dataclasses.replace(state, **{"current_piece": piece})
+
+
+@dataclass(frozen=True)
+class RotateRight(Action):
+    @property
+    def priority(self) -> int:
+        return 1
+
+    def apply(self, state: "GameState") -> "GameState":
+        piece = Piece.rotate(state.current_piece, direction="right", board=state.board)
+        if GameState._collision(piece, state.board):
+            # Undo move by not changing the piece
+            return state
+        return dataclasses.replace(state, **{"current_piece": piece})
+
+
+@dataclass(frozen=True)
+class SoftDrop(Action):
+    @property
+    def priority(self) -> int:
+        return 2
+
+    def apply(self, state: "GameState") -> "GameState":
+        piece = Piece.move(state.current_piece, dx=0, dy=1)
+        if GameState._collision(piece, state.board):
+            # Undo move by not changing the piece
+            return state
+        return dataclasses.replace(state, **{"current_piece": piece})
+
+
+@dataclass(frozen=True)
+class HardDrop(Action):
+    @property
+    def priority(self) -> int:
+        return 4  # Highest priority
+
+    def apply(self, state: "GameState") -> "GameState":
+        piece = state.current_piece
+        drop_distance = 0
+        while not GameState._collision(Piece.move(piece, dx=0, dy=1), state.board):
+            piece = Piece.move(piece, dx=0, dy=1)
+            drop_distance += 1
+        # Place the piece
+        board_after_lock = Board.place_piece(state.board, piece)
+        # Clear lines and update score
+        board_after_clear, lines_cleared = Board.clear_lines(board_after_lock)
+        # Update score with hard drop bonus
+        new_score = state.score + (drop_distance * 2) + {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}.get(lines_cleared, 0)
+        total_lines = state.lines_cleared + lines_cleared
+        new_level = state.level
+        if total_lines // 10 > state.level - 1:
+            new_level += 1
+
+        # Get next piece
+        if state.next_pieces:
+            next_piece = state.next_pieces[0]
+            remaining_pieces = state.next_pieces[1:]
+            new_current_piece = Piece.move(next_piece, 0, 0)  # Ensure position and orientation are set
+            # Check for game over condition
+            if GameState._collision(new_current_piece, board_after_clear):
+                return dataclasses.replace(
+                    state,
+                    board=board_after_clear,
+                    score=new_score,
+                    lines_cleared=total_lines,
+                    level=new_level,
+                    game_over=True,
+                )
+            return dataclasses.replace(
+                state,
+                board=board_after_clear,
+                current_piece=new_current_piece,
+                next_pieces=remaining_pieces,
+                score=new_score,
+                lines_cleared=total_lines,
+                level=new_level,
+                hold_used=False,
+                lock_delay_counter=0,
+            )
+        else:
+            # No more pieces, game over
+            return dataclasses.replace(
+                state,
+                board=board_after_clear,
+                score=new_score,
+                lines_cleared=total_lines,
+                level=new_level,
+                game_over=True,
+            )
+
+
+@dataclass(frozen=True)
+class Hold(Action):
+    @property
+    def priority(self) -> int:
+        return 5
+
+    def apply(self, state: "GameState") -> "GameState":
+        if state.hold_used:
+            return state  # Can't hold again until next piece
+        hold_used = True
+        if state.held_piece:
+            # Swap current piece with held piece
+            new_current_piece = Piece.move(state.held_piece, 0, 0)  # Ensure position and orientation are set
+            new_held_piece = state.current_piece
+            return dataclasses.replace(
+                state, current_piece=new_current_piece, held_piece=new_held_piece, hold_used=hold_used
+            )
+        else:
+            if state.next_pieces:
+                next_piece = state.next_pieces[0]
+                remaining_pieces = state.next_pieces[1:]
+                new_current_piece = Piece.move(next_piece, 0, 0)  # Ensure position and orientation are set
+                new_held_piece = state.current_piece
+                return dataclasses.replace(
+                    state,
+                    current_piece=new_current_piece,
+                    next_pieces=remaining_pieces,
+                    held_piece=new_held_piece,
+                    hold_used=hold_used,
+                )
+            else:
+                # No next piece, cannot hold; game over
+                return dataclasses.replace(state, game_over=True)
+
+
+@dataclass(frozen=True)
+class Idle(Action):
+    @property
+    def priority(self) -> int:
+        return 0
+
+    def apply(self, state: "GameState") -> "GameState":
+        return state  # Do nothing
+
+
+class GameAction(Enum):
+    MOVE_LEFT = MoveLeft()
+    MOVE_RIGHT = MoveRight()
+    ROTATE_LEFT = RotateLeft()
+    ROTATE_RIGHT = RotateRight()
+    HARD_DROP = HardDrop()
+    SOFT_DROP = SoftDrop()
+    HOLD = Hold()
+    IDLE = Idle()
+
+
+@dataclass(frozen=True)
+class Piece:
+    name: str
+    shape: np.ndarray
+    position: tuple[int, int]
+    orientation: int  # 0 to 3 for the four possible orientations
+
+    @staticmethod
+    def rotate(piece: "Piece", direction: str, board: "Board") -> "Piece":
+        if direction == "left":
+            rotations = [np.rot90(piece.shape, -1)]
+        elif direction == "right":
+            rotations = [np.rot90(piece.shape, 1)]
+        else:
+            raise ValueError("Invalid rotation direction")
+
+        # Wall kick offsets
+        wall_kick_offsets = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        for rotated_shape in rotations:
+            for dx, dy in wall_kick_offsets:
+                new_position = (piece.position[0] + dx, piece.position[1] + dy)
+                new_piece = Piece(piece.name, rotated_shape, new_position, piece.orientation)
+                if not GameState._collision(new_piece, board):
+                    new_orientation = (piece.orientation + (1 if direction == "right" else -1)) % 4
+                    return Piece(piece.name, rotated_shape, new_position, new_orientation)
+        # If all attempts fail, return the original piece
+        return piece
+
+    # @staticmethod
+    # def rotate(piece: "Piece", direction: str) -> "Piece":
+    #     if direction == "left":
+    #         new_shape = np.rot90(piece.shape, -1)
+    #         new_orientation = (piece.orientation - 1) % 4
+    #     elif direction == "right":
+    #         new_shape = np.rot90(piece.shape, 1)
+    #         new_orientation = (piece.orientation + 1) % 4
+    #     else:
+    #         raise ValueError("Invalid rotation direction")
+
+    #     return Piece(name=piece.name, shape=new_shape, position=piece.position, orientation=new_orientation)
+
+    @staticmethod
+    def move(piece: "Piece", dx: int, dy: int) -> "Piece":
+        new_position = (piece.position[0] + dx, piece.position[1] + dy)
+        return Piece(name=piece.name, shape=piece.shape, position=new_position, orientation=piece.orientation)
+
+
+@dataclass(frozen=True)
+class Board:
+    width: int
+    height: int
+    grid: np.ndarray  # Immutable 2D grid
+
+    @staticmethod
+    def place_piece(board: "Board", piece: "Piece") -> "Board":
+        new_grid = board.grid.copy()
+        for x_offset, y_offset in np.ndindex(piece.shape.shape):
+            if piece.shape[x_offset, y_offset] == 1:
+                x = piece.position[0] + x_offset
+                y = piece.position[1] + y_offset
+                if 0 <= x < board.width and 0 <= y < board.height:
+                    new_grid[y, x] = 1
+                else:
+                    # Handle out-of-bounds placement (e.g., game over)
+                    pass
+        return Board(width=board.width, height=board.height, grid=new_grid)
+
+    @staticmethod
+    def clear_lines(board: "Board") -> tuple["Board", int]:
+        new_grid = board.grid.copy()
+        new_grid_list = [row for row in new_grid if not np.all(row == 1)]
+        lines_cleared = board.height - len(new_grid_list)
+        # Add empty rows at the top
+        for _ in range(lines_cleared):
+            new_grid_list.insert(0, np.zeros(board.width, dtype=int))
+        new_grid = np.array(new_grid_list)
+        return Board(width=board.width, height=board.height, grid=new_grid), lines_cleared
+
+
+@dataclass(frozen=True)
+class GameState:
+    board: Board
+    current_piece: Piece
+    next_pieces: tuple[Piece, ...]
+    held_piece: Piece | None
+    score: int
+    lines_cleared: int
+    level: int
+    game_over: bool
+    hold_used: bool = False
+    lock_delay_counter: int = 0  # New field for lock delay
+    MAX_LOCK_DELAY: int = 0  # TODO IDK WHAT TO PUT HERE
+
+    @staticmethod
+    def update(state: "GameState", actions: list["Action"]) -> "GameState":
+        """
+        Update the game state by applying a list of actions.
+        Actions are applied based on their priority.
+        """
+        # Sort actions based on priority
+        sorted_actions = sorted(actions)
+        new_state = state
+
+        for action in sorted_actions:
+            if new_state.game_over:
+                break  # Stop processing if the game is over
+            # Apply the action
+            new_state = action.apply(new_state)
+
+        # Apply gravity and handle lock delay
+        if not new_state.game_over:
+            # Attempt to move the piece down
+            piece_after_gravity = Piece.move(new_state.current_piece, dx=0, dy=1)
+            if GameState._collision(piece_after_gravity, new_state.board):
+                # Collision detected; start or continue lock delay
+                if new_state.lock_delay_counter < MAX_LOCK_DELAY:
+                    new_state = dataclasses.replace(new_state, lock_delay_counter=new_state.lock_delay_counter + 1)
+                else:
+                    # Lock the piece
+                    board_after_lock = Board.place_piece(new_state.board, new_state.current_piece)
+                    board_after_clear, lines_cleared = Board.clear_lines(board_after_lock)
+                    new_state = GameState.calculate_score(
+                        dataclasses.replace(new_state, board=board_after_clear), lines_cleared
+                    )
+
+                    # Spawn next piece
+                    if new_state.next_pieces:
+                        next_piece = new_state.next_pieces[0]
+                        remaining_pieces = new_state.next_pieces[1:]
+                        new_current_piece = next_piece.move(0, 0)  # Ensure position and orientation are set
+                        new_state = dataclasses.replace(
+                            new_state,
+                            board=board_after_clear,
+                            current_piece=new_current_piece,
+                            next_pieces=remaining_pieces,
+                            lines_cleared=new_state.lines_cleared + lines_cleared,
+                            hold_used=False,
+                            lock_delay_counter=0,
+                        )
+                        # Check for game over condition
+                        if GameState._collision(new_state.current_piece, board_after_clear):
+                            new_state = dataclasses.replace(new_state, game_over=True)
+                    else:
+                        # No more pieces, game over
+                        new_state = dataclasses.replace(new_state, game_over=True)
+            else:
+                # No collision; apply gravity
+                new_state = dataclasses.replace(new_state, current_piece=piece_after_gravity, lock_delay_counter=0)
+
+        return new_state
+
+    @staticmethod
+    def calculate_score(state: "GameState", lines_cleared: int) -> "GameState":
+        """
+        Update the score and level based on lines cleared.
+        """
+        scoring = {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}
+        new_score = state.score + scoring.get(lines_cleared, 0)
+        total_lines = state.lines_cleared + lines_cleared
+        new_level = state.level
+
+        if total_lines // 10 > state.level - 1:
+            new_level += 1
+
+        return dataclasses.replace(state, score=new_score, lines_cleared=total_lines, level=new_level)
+
+    @staticmethod
+    def _collision(piece: "Piece", board: "Board") -> bool:
+        """
+        Check if the piece collides with the board boundaries or existing blocks.
+        """
+        for x_offset, y_offset in np.argwhere(piece.shape):
+            x = piece.position[0] + x_offset
+            y = piece.position[1] + y_offset
+            if x < 0 or x >= board.width or y < 0 or y >= board.height:
+                return True  # Out of bounds
+            if board.grid[y, x]:
+                return True  # Cell is already occupied
+        return False
 
 
 class TetrisEngine:
