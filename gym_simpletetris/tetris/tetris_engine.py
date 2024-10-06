@@ -3,14 +3,6 @@ import random
 import numpy as np
 from gym_simpletetris.tetris.finesse_evaluator import FinesseEvaluator
 from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem, ScoringSystem
-from gym_simpletetris.tetris.tetris_shapes import (
-    ACTION_NAME_TO_INDEX,
-    SHAPE_NAMES,
-    SHAPES,
-    simplify_board,
-    BASIC_ACTIONS,
-    ACTION_COMBINATIONS,
-)
 import math
 import heapq
 
@@ -22,7 +14,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
-from functools import total_ordering
+from functools import cached_property, total_ordering
 
 
 @total_ordering
@@ -226,14 +218,38 @@ class Idle(Action):
 
 
 class GameAction(Enum):
-    MOVE_LEFT = MoveLeft()
-    MOVE_RIGHT = MoveRight()
-    ROTATE_LEFT = RotateLeft()
-    ROTATE_RIGHT = RotateRight()
-    HARD_DROP = HardDrop()
-    SOFT_DROP = SoftDrop()
-    HOLD = Hold()
-    IDLE = Idle()
+    MOVE_LEFT = (MoveLeft, auto())
+    MOVE_RIGHT = (MoveRight, auto())
+    ROTATE_LEFT = (RotateLeft, auto())
+    ROTATE_RIGHT = (RotateRight, auto())
+    HARD_DROP = (HardDrop, auto())
+    SOFT_DROP = (SoftDrop, auto())
+    HOLD = (Hold, auto())
+    IDLE = (Idle, auto())
+
+    def __init__(self, action_class, index):
+        self.action_class = action_class
+        self.index = index
+
+    @classmethod
+    def from_str(cls, action_name: str) -> "GameAction | None":
+        try:
+            return cls[action_name.upper()]
+        except KeyError:
+            return None
+
+    @classmethod
+    def is_valid(cls, action_name: str) -> bool:
+        return cls.from_str(action_name) is not None
+
+    @classmethod
+    def from_index(cls, index: int) -> "GameAction | None":
+        return next((action for action in cls if action.index == index), None)
+
+    @cached_property
+    @classmethod
+    def get_combinations(cls):
+        return {action.index: [action.index] for action in cls}
 
 
 @dataclass(frozen=True)
@@ -242,6 +258,27 @@ class Piece:
     shape: np.ndarray
     position: tuple[int, int]
     orientation: int  # 0 to 3 for the four possible orientations
+
+    # Shape Definitions
+    # Adapted from the Tetris engine in the TetrisRL project by jaybutera
+    # https://github.com/jaybutera/tetrisRL
+    OG_SHAPES = {  # RGB here is GBR
+        "T": {"shape": ((0, 0), (-1, 0), (1, 0), (0, -1)), "color": (128, 0, 128)},  # Purple
+        "J": {"shape": ((0, 0), (-1, 0), (0, -1), (0, -2)), "color": (0, 255, 0)},  # Blue
+        "L": {"shape": ((0, 0), (1, 0), (0, -1), (0, -2)), "color": (165, 0, 255)},  # Orange
+        "Z": {"shape": ((0, 0), (-1, 0), (0, -1), (1, -1)), "color": (0, 0, 255)},  # Red
+        "S": {"shape": ((0, 0), (-1, -1), (0, -1), (1, 0)), "color": (255, 0, 0)},  # Green
+        "I": {"shape": ((0, 0), (0, -1), (0, -2), (0, -3)), "color": (255, 255, 0)},  # Cyan
+        "O": {"shape": ((0, 0), (0, -1), (-1, 0), (-1, -1)), "color": (0, 255, 255)},  # Yellow
+    }
+
+    OFF_BRAND_SHAPES = {
+        "I": {"shape": ((0, 0), (0, -1), (0, -2), (0, -3)), "color": (255, 255, 0)},  # Cyan
+        "O": {"shape": ((0, 0), (0, -1), (-1, 0), (-1, -1)), "color": (0, 255, 255)},  # Yellow
+    }
+
+    SHAPES = OG_SHAPES
+    SHAPE_NAMES = tuple(SHAPES.keys())
 
     @staticmethod
     def rotate(piece: "Piece", direction: str, board: "Board") -> "Piece":
@@ -265,19 +302,6 @@ class Piece:
         # If all attempts fail, return the original piece
         return piece
 
-    # @staticmethod
-    # def rotate(piece: "Piece", direction: str) -> "Piece":
-    #     if direction == "left":
-    #         new_shape = np.rot90(piece.shape, -1)
-    #         new_orientation = (piece.orientation - 1) % 4
-    #     elif direction == "right":
-    #         new_shape = np.rot90(piece.shape, 1)
-    #         new_orientation = (piece.orientation + 1) % 4
-    #     else:
-    #         raise ValueError("Invalid rotation direction")
-
-    #     return Piece(name=piece.name, shape=new_shape, position=piece.position, orientation=new_orientation)
-
     @staticmethod
     def move(piece: "Piece", dx: int, dy: int) -> "Piece":
         new_position = (piece.position[0] + dx, piece.position[1] + dy)
@@ -288,6 +312,7 @@ class Piece:
 class Board:
     width: int
     height: int
+    buffer_height: int
     grid: np.ndarray  # Immutable 2D grid
 
     @staticmethod
@@ -300,20 +325,30 @@ class Board:
                 if 0 <= x < board.width and 0 <= y < board.height:
                     new_grid[y, x] = 1
                 else:
-                    # Handle out-of-bounds placement (e.g., game over)
                     pass
-        return Board(width=board.width, height=board.height, grid=new_grid)
+        return Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height)
 
     @staticmethod
     def clear_lines(board: "Board") -> tuple["Board", int]:
         new_grid = board.grid.copy()
         new_grid_list = [row for row in new_grid if not np.all(row == 1)]
         lines_cleared = board.height - len(new_grid_list)
-        # Add empty rows at the top
         for _ in range(lines_cleared):
             new_grid_list.insert(0, np.zeros(board.width, dtype=int))
         new_grid = np.array(new_grid_list)
-        return Board(width=board.width, height=board.height, grid=new_grid), lines_cleared
+        return (
+            Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height),
+            lines_cleared,
+        )
+
+    @staticmethod
+    def simplify_board(board: np.ndarray) -> np.ndarray:
+        if board.ndim == 3:
+            return np.any(board != 0, axis=2).astype(np.float32)
+        elif board.ndim == 2:
+            return board.astype(np.float32)
+        else:
+            raise ValueError("Invalid board shape. Expected 2D or 3D array.")
 
 
 @dataclass(frozen=True)
@@ -457,10 +492,10 @@ class TetrisEngine:
         self.held_piece_name = None
         self.hold_used = False
         self.piece_queue = PieceQueue(preview_size)
-        self.shape_counts = dict(zip(SHAPE_NAMES, [0] * len(SHAPES)))  # TODO do this but for actions
-        self.shape = SHAPES["I"]
+        self.shape_counts = dict(zip(Piece.SHAPE_NAMES, [0] * len(Piece.SHAPES)))  # TODO do this but for actions
+        self.shape = Piece.SHAPES["I"]
         self.shape_name = "I"
-        self.anchor = self.get_spawn_position(SHAPES["I"]["shape"])
+        self.anchor = self.get_spawn_position(Piece.SHAPES["I"]["shape"])
         self.actions = [-99]
         self.current_orientation = 0  # Initialize the current orientation
         self.finesse_evaluator = FinesseEvaluator(self.anchor, self.shape_name)
@@ -540,7 +575,7 @@ class TetrisEngine:
 
         self.shape_name = self.piece_queue.next_piece()
         self.shape_counts[self.shape_name] += 1
-        self.shape = SHAPES[self.shape_name]["shape"]
+        self.shape = Piece.SHAPES[self.shape_name]["shape"]
         self.hold_used = False
 
         # Use the new spawn position
@@ -596,7 +631,7 @@ class TetrisEngine:
         board = board if board is not None else self.board
         # Simplify the board if needed
         if board.ndim == 3:
-            board = simplify_board(board)
+            board = Board.simplify_board(board)
         elif board.ndim == 2:
             board = board
         else:
@@ -615,7 +650,7 @@ class TetrisEngine:
         return holes
 
     def get_info(self):
-        simple_board = simplify_board(self.board)
+        simple_board = Board.simplify_board(self.board)
         ghost_piece_anchor = self.get_ghost_piece_position()
         ghost_piece_coords = TetrisEngine._get_coords(self.shape, ghost_piece_anchor, self.width, self.total_height)
         current_piece_coords = TetrisEngine._get_coords(self.shape, self.anchor, self.width, self.total_height)
@@ -675,7 +710,7 @@ class TetrisEngine:
             "is_current_finesse": self.is_current_finesse,
             "is_finesse_complete": self.finesse_evaluator.finesse_complete,
             "random_valid_move": (random_valid_move),  # Include the random move in the info dict
-            "random_valid_move_str": BASIC_ACTIONS[random_valid_move],
+            "random_valid_move_str": GameAction.from_index(random_valid_move),
             # "current_finesse_score": self.current_finesse_score,
         }
 
@@ -739,7 +774,7 @@ class TetrisEngine:
         cleared_lines = 0
 
         if (
-            ACTION_NAME_TO_INDEX["hard_drop"] in actions
+            GameAction.from_str("hard_drop") in actions
             or self.gravity_timer >= self.gravity_interval
             and self.gravity_interval != float("inf")
         ):
@@ -874,7 +909,7 @@ class TetrisEngine:
         # Add ghost piece
         ghost_anchor = self.get_ghost_piece_position()
 
-        ghost_color = tuple(min(255, c + 70) for c in SHAPES[self.shape_name]["color"])  # Lighter color
+        ghost_color = tuple(min(255, c + 70) for c in Piece.SHAPES[self.shape_name]["color"])  # Lighter color
 
         return state, self.shape, ghost_anchor, ghost_color
 
@@ -923,7 +958,7 @@ class TetrisEngine:
 
         if shape_name:
             if use_color:
-                color = SHAPES[shape_name]["color"] if on else (0, 0, 0)
+                color = Piece.SHAPES[shape_name]["color"] if on else (0, 0, 0)
             else:
                 color = 1 if on else 0
             for i, j in shape:
@@ -1107,7 +1142,7 @@ class TetrisEngine:
     def evaluate_board(self, board):
         # Simplify the board if needed
         if board.ndim == 3:
-            board = simplify_board(board)
+            board = Board.simplify_board(board)
 
         holes = self._count_holes(board)
         heights = TetrisEngine.get_column_heights(board)
@@ -1164,7 +1199,7 @@ class TetrisEngine:
         Generate all possible final positions (placements) for the current piece.
         """
         placements = []
-        board = simplify_board(self.board)
+        board = Board.simplify_board(self.board)
 
         for orientation in range(max_orientations := self.finesse_evaluator.get_max_orientations(self.shape_name)):
             # Rotate the shape to the desired orientation
@@ -1294,34 +1329,34 @@ class TetrisEngine:
         # Calculate how much to move left or right
         x_diff = target_x - current_x
         if x_diff > 0:
-            moves.extend([ACTION_NAME_TO_INDEX["right"]] * x_diff)  # Move right
+            moves.extend([GameAction.from_str("ROTATE_RIGHT")] * x_diff)  # Move right
         elif x_diff < 0:
-            moves.extend([ACTION_NAME_TO_INDEX["left"]] * abs(x_diff))  # Move left
+            moves.extend([GameAction.from_str("ROTATE_LEFT")] * abs(x_diff))  # Move left
 
         # Calculate the minimal number of rotations needed to match the target orientation
         orientation_diff = (target_orientation - current_orientation) % 4
         if orientation_diff == 1:
-            moves.append(ACTION_NAME_TO_INDEX["rotate_right"])  # Rotate right once
+            moves.append(GameAction.from_str("ROTATE_RIGHT"))  # Rotate right once
         elif orientation_diff == 3:
-            moves.append(ACTION_NAME_TO_INDEX["rotate_left"])  # Rotate left once
+            moves.append(GameAction.from_str("ROTATE_LEFT"))  # Rotate left once
         elif orientation_diff == 2:
             # Rotate twice in either direction
-            moves.extend([ACTION_NAME_TO_INDEX["rotate_right"]] * 2)  # Rotate right twice
+            moves.extend([GameAction.from_str("ROTATE_RIGHT")] * 2)  # Rotate right twice
 
         # After the moves and rotations, perform a hard drop
-        moves.append(ACTION_NAME_TO_INDEX["hard_drop"])
+        moves.append(GameAction.from_str("HARD_DROP"))
 
         return moves
 
     def get_shape_at_orientation(self, shape_name, orientation):
-        shape = SHAPES[shape_name]["shape"]
+        shape = Piece.SHAPES[shape_name]["shape"]
         for _ in range(orientation % 4):
             shape = TetrisEngine.rotated(shape, cclk=True)  # Rotate counter-clockwise
         return shape
 
     def get_lowest_y(self, x, orientation, shape):
         y = 0
-        while not TetrisEngine.is_occupied(shape, (x, y + 1), simplify_board(self.board)):
+        while not TetrisEngine.is_occupied(shape, (x, y + 1), Board.simplify_board(self.board)):
             y += 1
         return y
 
@@ -1340,7 +1375,7 @@ class TetrisEngine:
 
         if self.game_over:
             # print("uh oh, game over")
-            return random.choice([ACTION_NAME_TO_INDEX["left"], ACTION_NAME_TO_INDEX["right"]])
+            return random.choice([GameAction.from_str("MOVE_LEFT"), GameAction.from_str("MOVE_RIGHT")])
         # If we have no planned actions, we need to choose a new target and plan
         if not self.planned_actions:
             self._choose_target_position()
@@ -1356,9 +1391,12 @@ class TetrisEngine:
             # print(f"yaaaassssss: {action=}")
             return action
         else:
-            # If no actions are planned, default to idle
+            # If no actions are planned, do this I guess
             return random.choice(
-                [ACTION_NAME_TO_INDEX["left"], ACTION_NAME_TO_INDEX["right"], ACTION_NAME_TO_INDEX["hold_swap"]]
+                [
+                    random.choice([GameAction.from_str("MOVE_LEFT"), GameAction.from_str("MOVE_RIGHT")]),
+                    GameAction.from_str("HOLD"),
+                ]
             )
 
     def simulate_placement(self, placement, board):
@@ -1409,7 +1447,7 @@ class PieceQueue:
         self.fill_queue()
 
     def refill_bag(self):
-        self.bag = list(SHAPE_NAMES)
+        self.bag = list(Piece.SHAPE_NAMES)
         random.shuffle(self.bag)
 
     def next_piece(self):
