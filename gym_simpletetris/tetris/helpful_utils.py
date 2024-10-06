@@ -8,6 +8,8 @@ def format_value(v):
         return ", ".join([f"{k}={format_value(v)}" for k, v in v.items()])
     elif isinstance(v, (bool, str, np.bool_)):
         return v
+    elif v is None:
+        return "None"
 
     return f"{v:.0f}" if isinstance(v, int) or v.is_integer() else f"{v:.6f}"
 

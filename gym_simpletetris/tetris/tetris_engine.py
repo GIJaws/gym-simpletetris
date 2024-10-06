@@ -79,6 +79,8 @@ class TetrisEngine:
         self.old_holes = self.holes
         self.piece_height = 0
         self.lines_cleared = 0
+        self.lines_cleared_per_step = 0
+        self.prev_lines_cleared_per_step = 0
 
         self.num_lives = num_lives
         self.og_num_lives = num_lives
@@ -164,6 +166,8 @@ class TetrisEngine:
 
         # Count cleared lines
         cleared_lines = np.sum(can_clear)
+        self.prev_lines_cleared_per_step = self.lines_cleared_per_step
+        self.lines_cleared_per_step = cleared_lines
         self.lines_cleared += cleared_lines
 
         # Create new board with cleared lines removed
@@ -209,7 +213,6 @@ class TetrisEngine:
     def get_info(self):
         simple_board = simplify_board(self.board)
         ghost_piece_anchor = self.get_ghost_piece_position()
-        lines_cleared_per_step = self.lines_cleared - self.prev_info.get("lines_cleared", 0)
         ghost_piece_coords = TetrisEngine._get_coords(self.shape, ghost_piece_anchor, self.width, self.total_height)
         current_piece_coords = TetrisEngine._get_coords(self.shape, self.anchor, self.width, self.total_height)
         float_board_state = TetrisEngine.create_float_board_state(
@@ -240,7 +243,8 @@ class TetrisEngine:
             "ghost_piece_coords": ghost_piece_coords,
             "score": self.score,
             "total_lines_cleared": self.lines_cleared,
-            "lines_cleared_per_step": lines_cleared_per_step,
+            "lines_cleared_per_step": self.lines_cleared_per_step,
+            "prev_lines_cleared_per_step": self.prev_lines_cleared_per_step,
             "holes": self.holes,
             "old_holes": self.old_holes,
             "deaths": self.n_deaths,
@@ -389,14 +393,16 @@ class TetrisEngine:
         self._set_piece(True)
         state = np.copy(self.board)  # Ensure state being returned contains the current piece
         self._set_piece(False)
-        return state, reward, done
+
+        self.score = self.evaluate_board(self.board)
+        return state, self.score, done
 
     def clear(self):
         self.score = 0
         self.holes = 0
         self.piece_height = 0
         self.old_holes = self.holes
-
+        self.lines_cleared = 0
         self._new_piece()
 
         self.board = np.zeros_like(self.board)
@@ -404,6 +410,8 @@ class TetrisEngine:
 
         self.level = self.initial_level
         self.lines_for_next_level = 10
+        self.prev_lines_cleared_per_step = 0
+        self.lines_cleared_per_step = 0
         self.gravity_interval = self._calculate_gravity_interval()
         self.gravity_timer = 0
         self.piece_timer = 0
@@ -422,6 +430,8 @@ class TetrisEngine:
         self.score = 0
         self.holes = 0
         self.lines_cleared = 0
+        self.prev_lines_cleared_per_step = 0
+        self.lines_cleared_per_step = 0
         self.piece_height = 0
         self.old_holes = self.holes
         self.n_deaths = 0
@@ -700,7 +710,7 @@ class TetrisEngine:
         aggregate_height = np.sum(heights)
         bumpiness = np.sum(np.abs(np.diff(heights)))
         lines_cleared = self._count_lines_to_clear(board)
-        # well_sums = np.sum(self.calculate_well_sums(heights))
+        well_sums = np.sum(self.calculate_well_sums(heights))
 
         # Heuristic scoring
         # Using coefficients from well-known Tetris AI heuristics
@@ -709,7 +719,7 @@ class TetrisEngine:
         score -= aggregate_height * 0.510066
         score -= holes * 0.35663
         score -= bumpiness * 0.184483
-        # score -= well_sums * 0.1  # Penalty for wells
+        score -= well_sums * 0.1  # Penalty for wells
 
         return score
 
@@ -730,7 +740,7 @@ class TetrisEngine:
         scored_placements.sort(reverse=True, key=lambda x: x[0])
 
         # Select the top N placements
-        top_N = 5
+        top_N = 1
         top_placements = [placement for score, placement in scored_placements[:top_N]]
 
         # print(f"{self.time=}")
@@ -770,14 +780,62 @@ class TetrisEngine:
                 while not TetrisEngine.is_occupied(rotated_shape, (x, y + 1), board):
                     y += 1
                 # Record the placement
-                # placement = {"x": x, "y": (40 - y) * (y != 0), "orientation": orientation, "shape": rotated_shape}
                 placement = {"x": x, "y": y, "orientation": orientation, "shape": rotated_shape}
-                if self.is_placement_acceptable(placement, board):
-                    placements.append(placement)
+                # if self.is_placement_acceptable(placement, board):
+                placements.append(placement)
 
         return placements
 
     def is_placement_acceptable(self, placement, board):
+        """
+        Check if a placement is acceptable, taking into account the overall board state.
+
+        Returns True if acceptable, False otherwise.
+        """
+        # Simulate the placement
+        # prev_max_heights = TetrisEngine.get_column_heights(self.board)
+        # simulated_board = self.simulate_placement(placement, board)
+        # simplified_board = simplify_board(simulated_board)
+        # heights = TetrisEngine.get_column_heights(simplified_board)
+
+        # Compute a measure of board condition
+        # aggregate_height = np.sum(heights)
+        # num_holes = self._count_holes(simplified_board)
+
+        # # Adjust thresholds based on board condition
+        # base_max_height_diff = 4
+        # base_max_well_depth = 4
+
+        # # Calculate 'badness' score
+        # badness = aggregate_height + num_holes * 10  # Adjust weights as appropriate
+
+        # # Define threshold for poor board condition
+        # badness_threshold = 100  # Adjust as appropriate
+
+        # if badness > badness_threshold:
+        #     # Relax constraints if board is in poor condition
+        #     max_height_diff = base_max_height_diff + 3
+        #     max_well_depth = base_max_well_depth + 3
+        # else:
+        #     max_height_diff = base_max_height_diff
+        #     max_well_depth = base_max_well_depth
+
+        # # Compute differences between adjacent columns
+        # height_diffs = np.abs(np.diff(heights))
+
+        # # Avoid placements with high column height differences
+        # if np.any(height_diffs > max_height_diff):
+        #     return False
+
+        # # Avoid placements that create deep wells
+        # well_sums = self.calculate_well_sums(heights)
+        # if np.any(well_sums > max_well_depth):
+        #     return False
+        # if np.max(heights) > 10 and not np.max(prev_max_heights) > 10:
+        #     return False
+        return True
+
+    def is_placement_acceptable_bruh(self, placement, board):
         """
         Check if a placement is acceptable, i.e., it doesn't place the piece on top of narrow towers
         or create overhangs.
@@ -819,63 +877,37 @@ class TetrisEngine:
         if self.target_position is None:
             return []
 
-        moves = [
-            (ACTION_NAME_TO_INDEX["left"], "left"),
-            (ACTION_NAME_TO_INDEX["right"], "right"),
-            (ACTION_NAME_TO_INDEX["rotate_left"], "rotate_left"),
-            (ACTION_NAME_TO_INDEX["rotate_right"], "rotate_right"),
-        ]
+        moves = []
 
-        start_state = (self.anchor[0], self.anchor[1], self.current_orientation)
-        target_state = (self.target_position["x"], self.target_position["y"], self.target_position["orientation"])
+        # Get the current position and orientation of the piece
+        current_x, current_y, current_orientation = self.anchor[0], self.anchor[1], self.current_orientation
+        target_x, target_y, target_orientation = (
+            self.target_position["x"],
+            self.target_position["y"],
+            self.target_position["orientation"],
+        )
 
-        open_set = []
-        heapq.heappush(open_set, (0, start_state, []))
-        visited = set()
+        # Calculate how much to move left or right
+        x_diff = target_x - current_x
+        if x_diff > 0:
+            moves.extend([ACTION_NAME_TO_INDEX["right"]] * x_diff)  # Move right
+        elif x_diff < 0:
+            moves.extend([ACTION_NAME_TO_INDEX["left"]] * abs(x_diff))  # Move left
 
-        while open_set:
-            _, (x, y, orientation), actions = heapq.heappop(open_set)
+        # Calculate the minimal number of rotations needed to match the target orientation
+        orientation_diff = (target_orientation - current_orientation) % 4
+        if orientation_diff == 1:
+            moves.append(ACTION_NAME_TO_INDEX["rotate_right"])  # Rotate right once
+        elif orientation_diff == 3:
+            moves.append(ACTION_NAME_TO_INDEX["rotate_left"])  # Rotate left once
+        elif orientation_diff == 2:
+            # Rotate twice in either direction
+            moves.extend([ACTION_NAME_TO_INDEX["rotate_right"]] * 2)  # Rotate right twice
 
-            if (x, y, orientation) in visited:
-                continue
-            visited.add((x, y, orientation))
+        # After the moves and rotations, perform a hard drop
+        moves.append(ACTION_NAME_TO_INDEX["hard_drop"])
 
-            if (x, y, orientation) == target_state:
-                return actions + [ACTION_NAME_TO_INDEX["hard_drop"]]
-
-            # Simulate gravity
-            if not TetrisEngine.is_occupied(
-                self.get_shape_at_orientation(self.shape_name, orientation), (x, y + 1), simplify_board(self.board)
-            ):
-                y += 1
-
-            for action_value, action_name in moves:
-                new_orientation = orientation
-                new_x = x
-                new_y = y
-
-                if action_name == "left":
-                    new_x = x - 1
-                elif action_name == "right":
-                    new_x = x + 1
-                elif action_name == "rotate_left":
-                    new_orientation = (orientation - 1) % 4
-                elif action_name == "rotate_right":
-                    new_orientation = (orientation + 1) % 4
-                elif action_name == "soft_drop":
-                    new_y = y + 1
-
-                # Check boundaries and collisions
-                shape_at_new_orientation = self.get_shape_at_orientation(self.shape_name, new_orientation)
-                if TetrisEngine.is_occupied(shape_at_new_orientation, (new_x, new_y), simplify_board(self.board)):
-                    continue
-
-                new_state = (new_x, new_y, new_orientation)
-                cost_to_new_state = len(actions) + 1
-                estimated_cost = cost_to_new_state + self._heuristic_cost(new_state, target_state)
-                heapq.heappush(open_set, (estimated_cost, new_state, actions + [action_value]))
-
-        return []
+        return moves
 
     def get_shape_at_orientation(self, shape_name, orientation):
         shape = SHAPES[shape_name]["shape"]
@@ -903,25 +935,27 @@ class TetrisEngine:
         """
 
         if self.game_over:
-            print("uh oh, game over")
+            # print("uh oh, game over")
             return random.choice([ACTION_NAME_TO_INDEX["left"], ACTION_NAME_TO_INDEX["right"]])
         # If we have no planned actions, we need to choose a new target and plan
         if not self.planned_actions:
             self._choose_target_position()
-            print(f"{self.target_position=}")
+            # print(f"{self.target_position=}")
             self.planned_actions = self._find_path_to_target()
-            print(f"{self.planned_actions=}")
+            # print(f"{self.planned_actions=}")
             self.prev_actions = []
 
         if self.planned_actions:
             # Get the next action in the planned sequence
             action = self.planned_actions.pop(0)
             self.prev_actions.append(action)
-            print(f"yaaaassssss: {action=}")
+            # print(f"yaaaassssss: {action=}")
             return action
         else:
             # If no actions are planned, default to idle
-            return random.choice([ACTION_NAME_TO_INDEX["left"], ACTION_NAME_TO_INDEX["right"]])
+            return random.choice(
+                [ACTION_NAME_TO_INDEX["left"], ACTION_NAME_TO_INDEX["right"], ACTION_NAME_TO_INDEX["hold_swap"]]
+            )
 
     def simulate_placement(self, placement, board):
         """
