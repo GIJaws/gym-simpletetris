@@ -1,8 +1,10 @@
 import dataclasses
 import random
+from typing import Literal
 import numpy as np
 from gym_simpletetris.tetris.finesse_evaluator import FinesseEvaluator
 from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem, ScoringSystem
+from gym_simpletetris.tetris.pieces import Piece, PieceType, PieceQueue
 import math
 import heapq
 
@@ -11,16 +13,178 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 
 
 from functools import cached_property, total_ordering
 
 
+@dataclass(frozen=True)
+class Board:
+    width: int
+    height: int
+    buffer_height: int
+    grid: np.ndarray  # Immutable 2D or 3D grid
+    is_colour: bool = dataclasses.field(init=False)
+
+    def __post_init__(self):
+        if self.grid.ndim not in (2, 3):
+            raise ValueError("Invalid board shape. Expected 2D or 3D array.")
+        object.__setattr__(self, "is_colour", self.grid.ndim == 3)
+
+    @staticmethod
+    def place_piece(board: "Board", piece: Piece) -> "Board":
+        new_grid = board.grid.copy()
+        color = piece.color if board.is_colour else 1
+        for x_offset, y_offset in np.ndindex(piece.shape.shape):
+            if piece.shape[x_offset, y_offset] == 1:
+                x = piece.position[0] + x_offset
+                y = piece.position[1] + y_offset
+                if 0 <= x < board.width and 0 <= y < board.height:
+                    new_grid[y, x] = color
+
+        return Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height)
+
+    @staticmethod
+    def clear_lines(board: "Board") -> tuple["Board", int]:
+        new_grid = board.grid.copy()
+        new_grid_list = [row for row in new_grid if not np.all(row == 1)]
+        lines_cleared = board.height - len(new_grid_list)
+        for _ in range(lines_cleared):
+            new_grid_list.insert(0, np.zeros(board.width, dtype=int))
+        new_grid = np.array(new_grid_list)
+        return (
+            Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height),
+            lines_cleared,
+        )
+
+    @staticmethod
+    def simplify_board(board: np.ndarray) -> np.ndarray:
+        if board.ndim == 3:
+            return np.any(board != 0, axis=2).astype(np.float32)
+        elif board.ndim == 2:
+            return board.astype(np.float32)
+        else:
+            raise ValueError("Invalid board shape. Expected 2D or 3D array.")
+
+    def count_holes(self):
+        """Count the number of holes in the board."""
+        board = Board.simplify_board(self.grid) if self.is_colour else self.grid
+        holes = 0
+
+        num_cols, num_rows = board.shape
+        for col in range(num_cols):
+            col_data = board[col, :]
+            filled_indices = np.where(col_data != 0)[0]
+            if len(filled_indices) == 0:
+                continue  # No filled cells in this column
+            highest_filled_row = filled_indices[0]
+            holes += np.sum(col_data[highest_filled_row + 1 :] == 0)
+        return holes
+
+    def get_column_heights(self):
+        non_zero_mask = self.grid != 0
+
+        heights = self.grid.shape[1] - np.argmax(non_zero_mask, axis=1)
+        return np.where(non_zero_mask.any(axis=1), heights, 0)
+
+
+@dataclass(frozen=True)
+class GameState:
+    board: Board  # Assumption that the board stored in GameState does not include the current piece that is falling
+    current_piece: Piece
+    next_pieces: tuple[Piece, ...]
+    held_piece: Piece | None
+    score: int
+    lines_cleared: int
+    level: int
+    game_over: bool
+    hold_used: bool = False
+    lock_delay_counter: int = 0
+    MAX_LOCK_DELAY: int = 30  # TODO IDK WHAT TO PUT HERE
+
+    @staticmethod
+    def update(state: "GameState", actions: list["Action"]) -> "GameState":
+        new_state = state
+
+        sorted_actions = sorted(actions)
+        for action in sorted_actions:
+            if new_state.game_over:
+                break
+            new_state = action.apply(new_state)
+
+        if not new_state.game_over:
+            piece_after_gravity = Action.move(new_state.current_piece, dx=0, dy=1)
+            if GameState._collision(piece_after_gravity, new_state.board):
+                if new_state.lock_delay_counter < new_state.MAX_LOCK_DELAY:
+                    new_state = dataclasses.replace(new_state, lock_delay_counter=new_state.lock_delay_counter + 1)
+                else:
+                    board_after_lock = Board.place_piece(new_state.board, new_state.current_piece)
+                    board_after_clear, lines_cleared = Board.clear_lines(board_after_lock)
+                    new_state = GameState.calculate_score(
+                        dataclasses.replace(new_state, board=board_after_clear), lines_cleared
+                    )
+
+                    if new_state.next_pieces:
+                        next_piece = new_state.next_pieces[0]
+                        remaining_pieces = new_state.next_pieces[1:]
+                        new_current_piece = Action.move(next_piece, 0, 0)
+                        new_state = dataclasses.replace(
+                            new_state,
+                            board=board_after_clear,
+                            current_piece=new_current_piece,
+                            next_pieces=remaining_pieces,
+                            lines_cleared=new_state.lines_cleared + lines_cleared,
+                            hold_used=False,
+                            lock_delay_counter=0,
+                        )
+                        if GameState._collision(new_state.current_piece, board_after_clear):
+                            new_state = dataclasses.replace(new_state, game_over=True)
+                    else:
+                        new_state = dataclasses.replace(new_state, game_over=True)
+            else:
+                new_state = dataclasses.replace(new_state, current_piece=piece_after_gravity, lock_delay_counter=0)
+
+        return new_state
+
+    @staticmethod
+    def calculate_score(state: "GameState", lines_cleared: int) -> "GameState":
+        """
+        Update the score and level based on lines cleared.
+        """
+        scoring = {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}
+        new_score = state.score + scoring.get(lines_cleared, 0)
+        total_lines = state.lines_cleared + lines_cleared
+        new_level = state.level
+
+        if total_lines // 10 > state.level - 1:
+            new_level += 1
+
+        return dataclasses.replace(state, score=new_score, lines_cleared=total_lines, level=new_level)
+
+    @staticmethod
+    def _collision(piece: Piece, board: Board) -> bool:
+        """
+        Check if the piece collides with the board boundaries or existing blocks.
+        """
+        for x_offset, y_offset in np.argwhere(piece.shape):
+            x = piece.position[0] + x_offset
+            y = piece.position[1] + y_offset
+            if x < 0 or x >= board.width or y < 0 or y >= board.height:
+                return True  # Out of bounds
+            if board.grid[y, x]:
+                return True  # Cell is already occupied
+        return False
+
+    @staticmethod
+    def get_full_board(state: "GameState") -> Board:
+        # Method to get a board with the current piece included, if needed for rendering or other purposes
+        return Board.place_piece(state.board, state.current_piece)
+
+
 @total_ordering
 class Action(ABC):
     @abstractmethod
-    def apply(self, state: "GameState") -> "GameState":
+    def apply(self, state: GameState) -> GameState:
         """Apply the action to the game state and return a new game state."""
         pass
 
@@ -29,6 +193,30 @@ class Action(ABC):
     def priority(self) -> int:
         """Return the priority of the action."""
         pass
+
+    @staticmethod
+    def rotate(piece: Piece, direction: Literal["left", "right"], board: Board) -> Piece:
+        if direction == "left":
+            rotated_shape = np.rot90(piece.shape, -1)
+        elif direction == "right":
+            rotated_shape = np.rot90(piece.shape, 1)
+        else:
+            raise ValueError("Invalid rotation direction (btw this should never be called, what dio you do?)")
+
+        wall_kick_offsets = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        for dx, dy in wall_kick_offsets:
+            new_position = (piece.position[0] + dx, piece.position[1] + dy)
+            new_piece = dataclasses.replace(piece, shape=rotated_shape, position=new_position)
+            if not GameState._collision(new_piece, board):
+                new_orientation = (piece.orientation + (1 if direction == "right" else -1)) % 4
+                return dataclasses.replace(new_piece, orientation=new_orientation)
+        return piece
+
+    @staticmethod
+    def move(piece: Piece, dx: int, dy: int) -> Piece:
+        new_position = (piece.position[0] + dx, piece.position[1] + dy)
+        return dataclasses.replace(piece, position=new_position)
 
     # Define the less-than comparison based on priority
     def __lt__(self, other: "Action") -> bool:
@@ -47,8 +235,8 @@ class MoveLeft(Action):
     def priority(self) -> int:
         return 1
 
-    def apply(self, state: "GameState") -> "GameState":
-        piece = Piece.move(state.current_piece, dx=-1, dy=0)
+    def apply(self, state: GameState) -> GameState:
+        piece = Action.move(state.current_piece, dx=-1, dy=0)
         if GameState._collision(piece, state.board):
             # Undo move by not changing the piece
             return state
@@ -61,8 +249,8 @@ class MoveRight(Action):
     def priority(self) -> int:
         return 1
 
-    def apply(self, state: "GameState") -> "GameState":
-        piece = Piece.move(state.current_piece, dx=1, dy=0)
+    def apply(self, state: GameState) -> GameState:
+        piece = Action.move(state.current_piece, dx=1, dy=0)
         if GameState._collision(piece, state.board):
             # Undo move by not changing the piece
             return state
@@ -75,8 +263,8 @@ class RotateLeft(Action):
     def priority(self) -> int:
         return 1
 
-    def apply(self, state: "GameState") -> "GameState":
-        piece = Piece.rotate(state.current_piece, direction="left", board=state.board)
+    def apply(self, state: GameState) -> GameState:
+        piece = Action.rotate(state.current_piece, direction="left", board=state.board)
         if GameState._collision(piece, state.board):
             # Undo move by not changing the piece
             return state
@@ -89,8 +277,8 @@ class RotateRight(Action):
     def priority(self) -> int:
         return 1
 
-    def apply(self, state: "GameState") -> "GameState":
-        piece = Piece.rotate(state.current_piece, direction="right", board=state.board)
+    def apply(self, state: GameState) -> GameState:
+        piece = Action.rotate(state.current_piece, direction="right", board=state.board)
         if GameState._collision(piece, state.board):
             # Undo move by not changing the piece
             return state
@@ -103,8 +291,8 @@ class SoftDrop(Action):
     def priority(self) -> int:
         return 2
 
-    def apply(self, state: "GameState") -> "GameState":
-        piece = Piece.move(state.current_piece, dx=0, dy=1)
+    def apply(self, state: GameState) -> GameState:
+        piece = Action.move(state.current_piece, dx=0, dy=1)
         if GameState._collision(piece, state.board):
             # Undo move by not changing the piece
             return state
@@ -117,11 +305,11 @@ class HardDrop(Action):
     def priority(self) -> int:
         return 4  # Highest priority
 
-    def apply(self, state: "GameState") -> "GameState":
+    def apply(self, state: GameState) -> GameState:
         piece = state.current_piece
         drop_distance = 0
-        while not GameState._collision(Piece.move(piece, dx=0, dy=1), state.board):
-            piece = Piece.move(piece, dx=0, dy=1)
+        while not GameState._collision(Action.move(piece, dx=0, dy=1), state.board):
+            piece = Action.move(piece, dx=0, dy=1)
             drop_distance += 1
         # Place the piece
         board_after_lock = Board.place_piece(state.board, piece)
@@ -138,7 +326,7 @@ class HardDrop(Action):
         if state.next_pieces:
             next_piece = state.next_pieces[0]
             remaining_pieces = state.next_pieces[1:]
-            new_current_piece = Piece.move(next_piece, 0, 0)  # Ensure position and orientation are set
+            new_current_piece = Action.move(next_piece, 0, 0)  # Ensure position and orientation are set
             # Check for game over condition
             if GameState._collision(new_current_piece, board_after_clear):
                 return dataclasses.replace(
@@ -178,13 +366,13 @@ class Hold(Action):
     def priority(self) -> int:
         return 5
 
-    def apply(self, state: "GameState") -> "GameState":
+    def apply(self, state: GameState) -> GameState:
         if state.hold_used:
             return state  # Can't hold again until next piece
         hold_used = True
         if state.held_piece:
             # Swap current piece with held piece
-            new_current_piece = Piece.move(state.held_piece, 0, 0)  # Ensure position and orientation are set
+            new_current_piece = Action.move(state.held_piece, 0, 0)  # Ensure position and orientation are set
             new_held_piece = state.current_piece
             return dataclasses.replace(
                 state, current_piece=new_current_piece, held_piece=new_held_piece, hold_used=hold_used
@@ -193,7 +381,7 @@ class Hold(Action):
             if state.next_pieces:
                 next_piece = state.next_pieces[0]
                 remaining_pieces = state.next_pieces[1:]
-                new_current_piece = Piece.move(next_piece, 0, 0)  # Ensure position and orientation are set
+                new_current_piece = Action.move(next_piece, 0, 0)  # Ensure position and orientation are set
                 new_held_piece = state.current_piece
                 return dataclasses.replace(
                     state,
@@ -213,7 +401,7 @@ class Idle(Action):
     def priority(self) -> int:
         return 0
 
-    def apply(self, state: "GameState") -> "GameState":
+    def apply(self, state: GameState) -> GameState:
         return state  # Do nothing
 
 
@@ -250,207 +438,6 @@ class GameAction(Enum):
     @classmethod
     def get_combinations(cls):
         return {action.index: [action.index] for action in cls}
-
-
-@dataclass(frozen=True)
-class Piece:
-    name: str
-    shape: np.ndarray
-    position: tuple[int, int]
-    orientation: int  # 0 to 3 for the four possible orientations
-
-    # Shape Definitions
-    # Adapted from the Tetris engine in the TetrisRL project by jaybutera
-    # https://github.com/jaybutera/tetrisRL
-    OG_SHAPES = {  # RGB here is GBR
-        "T": {"shape": ((0, 0), (-1, 0), (1, 0), (0, -1)), "color": (128, 0, 128)},  # Purple
-        "J": {"shape": ((0, 0), (-1, 0), (0, -1), (0, -2)), "color": (0, 255, 0)},  # Blue
-        "L": {"shape": ((0, 0), (1, 0), (0, -1), (0, -2)), "color": (165, 0, 255)},  # Orange
-        "Z": {"shape": ((0, 0), (-1, 0), (0, -1), (1, -1)), "color": (0, 0, 255)},  # Red
-        "S": {"shape": ((0, 0), (-1, -1), (0, -1), (1, 0)), "color": (255, 0, 0)},  # Green
-        "I": {"shape": ((0, 0), (0, -1), (0, -2), (0, -3)), "color": (255, 255, 0)},  # Cyan
-        "O": {"shape": ((0, 0), (0, -1), (-1, 0), (-1, -1)), "color": (0, 255, 255)},  # Yellow
-    }
-
-    OFF_BRAND_SHAPES = {
-        "I": {"shape": ((0, 0), (0, -1), (0, -2), (0, -3)), "color": (255, 255, 0)},  # Cyan
-        "O": {"shape": ((0, 0), (0, -1), (-1, 0), (-1, -1)), "color": (0, 255, 255)},  # Yellow
-    }
-
-    SHAPES = OG_SHAPES
-    SHAPE_NAMES = tuple(SHAPES.keys())
-
-    @staticmethod
-    def rotate(piece: "Piece", direction: str, board: "Board") -> "Piece":
-        if direction == "left":
-            rotations = [np.rot90(piece.shape, -1)]
-        elif direction == "right":
-            rotations = [np.rot90(piece.shape, 1)]
-        else:
-            raise ValueError("Invalid rotation direction")
-
-        # Wall kick offsets
-        wall_kick_offsets = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
-
-        for rotated_shape in rotations:
-            for dx, dy in wall_kick_offsets:
-                new_position = (piece.position[0] + dx, piece.position[1] + dy)
-                new_piece = Piece(piece.name, rotated_shape, new_position, piece.orientation)
-                if not GameState._collision(new_piece, board):
-                    new_orientation = (piece.orientation + (1 if direction == "right" else -1)) % 4
-                    return Piece(piece.name, rotated_shape, new_position, new_orientation)
-        # If all attempts fail, return the original piece
-        return piece
-
-    @staticmethod
-    def move(piece: "Piece", dx: int, dy: int) -> "Piece":
-        new_position = (piece.position[0] + dx, piece.position[1] + dy)
-        return Piece(name=piece.name, shape=piece.shape, position=new_position, orientation=piece.orientation)
-
-
-@dataclass(frozen=True)
-class Board:
-    width: int
-    height: int
-    buffer_height: int
-    grid: np.ndarray  # Immutable 2D grid
-
-    @staticmethod
-    def place_piece(board: "Board", piece: "Piece") -> "Board":
-        new_grid = board.grid.copy()
-        for x_offset, y_offset in np.ndindex(piece.shape.shape):
-            if piece.shape[x_offset, y_offset] == 1:
-                x = piece.position[0] + x_offset
-                y = piece.position[1] + y_offset
-                if 0 <= x < board.width and 0 <= y < board.height:
-                    new_grid[y, x] = 1
-                else:
-                    pass
-        return Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height)
-
-    @staticmethod
-    def clear_lines(board: "Board") -> tuple["Board", int]:
-        new_grid = board.grid.copy()
-        new_grid_list = [row for row in new_grid if not np.all(row == 1)]
-        lines_cleared = board.height - len(new_grid_list)
-        for _ in range(lines_cleared):
-            new_grid_list.insert(0, np.zeros(board.width, dtype=int))
-        new_grid = np.array(new_grid_list)
-        return (
-            Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height),
-            lines_cleared,
-        )
-
-    @staticmethod
-    def simplify_board(board: np.ndarray) -> np.ndarray:
-        if board.ndim == 3:
-            return np.any(board != 0, axis=2).astype(np.float32)
-        elif board.ndim == 2:
-            return board.astype(np.float32)
-        else:
-            raise ValueError("Invalid board shape. Expected 2D or 3D array.")
-
-
-@dataclass(frozen=True)
-class GameState:
-    board: Board
-    current_piece: Piece
-    next_pieces: tuple[Piece, ...]
-    held_piece: Piece | None
-    score: int
-    lines_cleared: int
-    level: int
-    game_over: bool
-    hold_used: bool = False
-    lock_delay_counter: int = 0  # New field for lock delay
-    MAX_LOCK_DELAY: int = 0  # TODO IDK WHAT TO PUT HERE
-
-    @staticmethod
-    def update(state: "GameState", actions: list["Action"]) -> "GameState":
-        """
-        Update the game state by applying a list of actions.
-        Actions are applied based on their priority.
-        """
-        # Sort actions based on priority
-        sorted_actions = sorted(actions)
-        new_state = state
-
-        for action in sorted_actions:
-            if new_state.game_over:
-                break  # Stop processing if the game is over
-            # Apply the action
-            new_state = action.apply(new_state)
-
-        # Apply gravity and handle lock delay
-        if not new_state.game_over:
-            # Attempt to move the piece down
-            piece_after_gravity = Piece.move(new_state.current_piece, dx=0, dy=1)
-            if GameState._collision(piece_after_gravity, new_state.board):
-                # Collision detected; start or continue lock delay
-                if new_state.lock_delay_counter < MAX_LOCK_DELAY:
-                    new_state = dataclasses.replace(new_state, lock_delay_counter=new_state.lock_delay_counter + 1)
-                else:
-                    # Lock the piece
-                    board_after_lock = Board.place_piece(new_state.board, new_state.current_piece)
-                    board_after_clear, lines_cleared = Board.clear_lines(board_after_lock)
-                    new_state = GameState.calculate_score(
-                        dataclasses.replace(new_state, board=board_after_clear), lines_cleared
-                    )
-
-                    # Spawn next piece
-                    if new_state.next_pieces:
-                        next_piece = new_state.next_pieces[0]
-                        remaining_pieces = new_state.next_pieces[1:]
-                        new_current_piece = next_piece.move(0, 0)  # Ensure position and orientation are set
-                        new_state = dataclasses.replace(
-                            new_state,
-                            board=board_after_clear,
-                            current_piece=new_current_piece,
-                            next_pieces=remaining_pieces,
-                            lines_cleared=new_state.lines_cleared + lines_cleared,
-                            hold_used=False,
-                            lock_delay_counter=0,
-                        )
-                        # Check for game over condition
-                        if GameState._collision(new_state.current_piece, board_after_clear):
-                            new_state = dataclasses.replace(new_state, game_over=True)
-                    else:
-                        # No more pieces, game over
-                        new_state = dataclasses.replace(new_state, game_over=True)
-            else:
-                # No collision; apply gravity
-                new_state = dataclasses.replace(new_state, current_piece=piece_after_gravity, lock_delay_counter=0)
-
-        return new_state
-
-    @staticmethod
-    def calculate_score(state: "GameState", lines_cleared: int) -> "GameState":
-        """
-        Update the score and level based on lines cleared.
-        """
-        scoring = {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}
-        new_score = state.score + scoring.get(lines_cleared, 0)
-        total_lines = state.lines_cleared + lines_cleared
-        new_level = state.level
-
-        if total_lines // 10 > state.level - 1:
-            new_level += 1
-
-        return dataclasses.replace(state, score=new_score, lines_cleared=total_lines, level=new_level)
-
-    @staticmethod
-    def _collision(piece: "Piece", board: "Board") -> bool:
-        """
-        Check if the piece collides with the board boundaries or existing blocks.
-        """
-        for x_offset, y_offset in np.argwhere(piece.shape):
-            x = piece.position[0] + x_offset
-            y = piece.position[1] + y_offset
-            if x < 0 or x >= board.width or y < 0 or y >= board.height:
-                return True  # Out of bounds
-            if board.grid[y, x]:
-                return True  # Cell is already occupied
-        return False
 
 
 class TetrisEngine:
@@ -1004,98 +991,6 @@ class TetrisEngine:
         return s
 
     @staticmethod
-    def rotated(shape, cclk=False):
-        """Rotate a shape clockwise (cclk=False) or counterclockwise (cclk=True).
-
-        Parameters
-        ----------
-        shape : List[Tuple[int, int]]
-            The shape to rotate.
-        cclk : bool, optional
-            Whether to rotate clockwise or counterclockwise. Defaults to False.
-
-        Returns
-        -------
-        List[Tuple[int, int]]
-            The rotated shape.
-        """
-        if cclk:
-            return [(-j, i) for i, j in shape]
-        else:
-            return [(j, -i) for i, j in shape]
-
-    @staticmethod
-    def is_occupied(shape, anchor, board):
-        for i, j in shape:
-            x = anchor[0] + i
-            y = anchor[1] + j
-            if x < 0 or x >= board.shape[0] or y < 0 or y >= board.shape[1]:
-                return True  # Out of bounds
-            if np.any(board[x, y]):
-                return True  # Position already occupied
-        return False
-
-    @staticmethod
-    def left(shape, anchor, board, current_orientation=None, max_orientations=None):
-        new_anchor = (anchor[0] - 1, anchor[1])
-        if TetrisEngine.is_occupied(shape, new_anchor, board):
-            return shape, anchor, current_orientation
-        else:
-            return shape, new_anchor, current_orientation
-
-    @staticmethod
-    def right(shape, anchor, board, current_orientation=None, max_orientations=None):
-        new_anchor = (anchor[0] + 1, anchor[1])
-        if TetrisEngine.is_occupied(shape, new_anchor, board):
-            return shape, anchor, current_orientation
-        else:
-            return shape, new_anchor, current_orientation
-
-    @staticmethod
-    def soft_drop(shape, anchor, board, current_orientation=None, max_orientations=None):
-        new_anchor = (anchor[0], anchor[1] + 1)
-        if TetrisEngine.is_occupied(shape, new_anchor, board):
-            return shape, anchor, current_orientation
-        else:
-            return shape, new_anchor, current_orientation
-
-    @staticmethod
-    def hard_drop(shape, anchor, board, current_orientation=None, max_orientations=None):
-        while not TetrisEngine.is_occupied(shape, (anchor[0], anchor[1] + 1), board):
-            anchor = (anchor[0], anchor[1] + 1)
-        return shape, anchor, current_orientation
-
-    @staticmethod
-    def rotate_left(shape, anchor, board, current_orientation=None, max_orientations=None):
-        new_shape = TetrisEngine.rotated(shape, cclk=False)
-        if TetrisEngine.is_occupied(new_shape, anchor, board):
-            return shape, anchor, current_orientation
-        else:
-            if current_orientation is not None and max_orientations is not None:
-                current_orientation = (current_orientation - 1) % max_orientations
-            return new_shape, anchor, current_orientation
-
-    @staticmethod
-    def rotate_right(shape, anchor, board, current_orientation=None, max_orientations=None):
-        new_shape = TetrisEngine.rotated(shape, cclk=True)
-        if TetrisEngine.is_occupied(new_shape, anchor, board):
-            return shape, anchor, current_orientation
-        else:
-            if current_orientation is not None and max_orientations is not None:
-                current_orientation = (current_orientation + 1) % max_orientations
-            return new_shape, anchor, current_orientation
-
-    @staticmethod
-    def idle(shape, anchor, board, current_orientation=None, max_orientations=None):
-        return shape, anchor, current_orientation
-
-    @staticmethod
-    def get_column_heights(board):
-        non_zero_mask = board != 0
-        heights = board.shape[1] - np.argmax(non_zero_mask, axis=1)
-        return np.where(non_zero_mask.any(axis=1), heights, 0)
-
-    @staticmethod
     def create_float_board_state(board, current_piece_coords, ghost_piece_coords):
         """
         Create a float board state with:
@@ -1436,32 +1331,3 @@ class TetrisEngine:
             j -= 1
 
         return new_board
-
-
-class PieceQueue:
-    def __init__(self, preview_size=4):
-        self.preview_size = max(1, preview_size)  # Ensure at least 1 piece in preview
-        self.pieces = []
-        self.bag = []
-        self.refill_bag()
-        self.fill_queue()
-
-    def refill_bag(self):
-        self.bag = list(Piece.SHAPE_NAMES)
-        random.shuffle(self.bag)
-
-    def next_piece(self):
-        if len(self.pieces) <= self.preview_size:
-            self.fill_queue()
-        return self.pieces.pop(0)
-
-    def fill_queue(self):
-        while len(self.pieces) < self.preview_size * 2:  # Keep 2x preview size in queue
-            if not self.bag:
-                self.refill_bag()
-            self.pieces.append(self.bag.pop())
-
-    def get_preview(self):
-        while len(self.pieces) < self.preview_size:
-            self.fill_queue()
-        return self.pieces[: self.preview_size]
