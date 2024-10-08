@@ -1,113 +1,67 @@
 import random
 from typing import Literal
 import numpy as np
-from gym_simpletetris.tetris.finesse_evaluator import FinesseEvaluator
+
+# from gym_simpletetris.tetris.finesse_evaluator import FinesseEvaluator
 from gym_simpletetris.tetris.scoring_system import AbstractScoringSystem, ScoringSystem
 from gym_simpletetris.tetris.pieces import Piece, PieceQueue
+from gym_simpletetris.tetris.board import Board
 import math
 
 from dataclasses import dataclass, replace, field
 
-from enum import Enum, auto
 
 from abc import ABC, abstractmethod
 
 
-from functools import cached_property, total_ordering
+from functools import total_ordering
 
 
-@dataclass(frozen=True)
-class Board:
-    width: int
-    height: int
-    buffer_height: int
-    grid: np.ndarray  # Immutable 2D or 3D grid
-    is_colour: bool = field(init=False)
-
-    def __post_init__(self):
-        if self.grid.ndim not in (2, 3):
-            raise ValueError("Invalid board shape. Expected 2D or 3D array.")
-        object.__setattr__(self, "is_colour", self.grid.ndim == 3)
-
-    def place_piece(self, piece: Piece) -> "Board":
-        board = self
-        new_grid = board.grid.copy()
-        color = piece.color if board.is_colour else 1
-        for x_offset, y_offset in np.ndindex(piece.shape.shape):
-            if piece.shape[x_offset, y_offset] == 1:
-                x = piece.position[0] + x_offset
-                y = piece.position[1] + y_offset
-                if 0 <= x < board.width and 0 <= y < board.height:
-                    new_grid[y, x] = color
-
-        return Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height)
-
-    def clear_lines(self) -> tuple["Board", int]:
-        board = self
-        new_grid = board.grid.copy()
-        new_grid_list = [row for row in new_grid if not np.all(row == 1)]
-        lines_cleared = board.height - len(new_grid_list)
-        for _ in range(lines_cleared):
-            new_grid_list.insert(0, np.zeros(board.width, dtype=int))
-        new_grid = np.array(new_grid_list)
-        return (
-            Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height),
-            lines_cleared,
-        )
-
-    def collision(self, piece: Piece) -> bool:
-        """
-        Check if the piece collides with the board boundaries or existing blocks.
-        """
-        for x_offset, y_offset in np.argwhere(piece.shape):
-            x = piece.position[0] + x_offset
-            y = piece.position[1] + y_offset
-            if x < 0 or x >= self.width or y < 0 or y >= self.height:
-                return True  # Out of bounds
-            if self.grid[y, x]:
-                return True  # Cell is already occupied
-        return False
+@total_ordering
+class Action(ABC):
+    priority = 0
 
     @staticmethod
-    def simplify_board(board: np.ndarray) -> np.ndarray:
-        if board.ndim == 3:
-            return np.any(board != 0, axis=2).astype(np.float32)
-        elif board.ndim == 2:
-            return board.astype(np.float32)
+    @abstractmethod
+    def apply(state: "GameState") -> "GameState":
+        """Apply the action to the game state and return a new game state."""
+        from gym_simpletetris.tetris.tetris_engine import GameState
+
+        pass
+
+    @staticmethod
+    def rotate(piece: Piece, direction: Literal["left", "right"], board: Board) -> Piece:
+        if direction == "left":
+            rotated_shape = np.rot90(piece.shape, -1)
+        elif direction == "right":
+            rotated_shape = np.rot90(piece.shape, 1)
         else:
-            raise ValueError("Invalid board shape. Expected 2D or 3D array.")
+            raise ValueError("Invalid rotation direction (btw this should never be called, what dio you do?)")
 
-    def count_holes(self):
-        """Count the number of holes in the board."""
-        board = Board.simplify_board(self.grid) if self.is_colour else self.grid
-        holes = 0
+        wall_kick_offsets = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
 
-        num_cols, num_rows = board.shape
-        for col in range(num_cols):
-            col_data = board[col, :]
-            filled_indices = np.where(col_data != 0)[0]
-            if len(filled_indices) == 0:
-                continue  # No filled cells in this column
-            highest_filled_row = filled_indices[0]
-            holes += np.sum(col_data[highest_filled_row + 1 :] == 0)
-        return holes
+        for dx, dy in wall_kick_offsets:
+            new_position = (piece.position[0] + dx, piece.position[1] + dy)
+            new_piece = replace(piece, shape=rotated_shape, position=new_position)
+            if not board.collision(new_piece):
+                new_orientation = (piece.orientation + (1 if direction == "right" else -1)) % 4
+                return replace(new_piece, orientation=new_orientation)
+        return piece
 
-    def get_column_heights(self):
-        non_zero_mask = self.grid != 0
+    @staticmethod
+    def move(piece: Piece, dx: int, dy: int) -> Piece:
+        new_position = (piece.position[0] + dx, piece.position[1] + dy)
+        return replace(piece, position=new_position)
 
-        heights = self.grid.shape[1] - np.argmax(non_zero_mask, axis=1)
-        return np.where(non_zero_mask.any(axis=1), heights, 0)
+    # Define the less-than comparison based on priority
+    def __lt__(self, other: "Action") -> bool:
+        return self.priority < other.priority
 
-    def set_spawn_position(self, piece: Piece) -> Piece:
-        return replace(piece, position=self.get_spawn_position(piece))
-
-    def get_spawn_position(self, piece: Piece) -> tuple[int, int]:
-        x_values = [i for i, j in piece.shape]
-        min_x, max_x = min(x_values), max(x_values)
-        piece_width = max_x - min_x + 1
-        spawn_x = (self.width - piece_width) // 2 - min_x
-        spawn_y = self.buffer_height - 1
-        return (spawn_x, spawn_y)
+    # Define equality based on priority
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Action):
+            return False
+        return self.priority == other.priority
 
 
 @dataclass(frozen=True)
@@ -173,7 +127,7 @@ class GameState:
 
         # TODO NEED TO CHECK IF A NEW PIECE IS EVEN NEEDED, SHOULD ONLY HAPPEN IF GRAVITY HAS LOCKED IT AS HARDDROP AND HOLD HANDLE THE NEXT PIECE LOGIC
         next_piece, *remaining_pieces = state.next_pieces
-        new_current_piece = Action.move(next_piece, 0, 0)
+        new_current_piece = state.board.set_spawn_position(next_piece)
 
         state = replace(
             state,
@@ -200,212 +154,6 @@ class GameState:
     def get_full_board(self) -> Board:
         # Method to get a board with the current piece included, if needed for rendering or other purposes
         return self.board.place_piece(self.current_piece)
-
-
-@total_ordering
-class Action(ABC):
-    priority = 0
-
-    @staticmethod
-    @abstractmethod
-    def apply(state: GameState) -> GameState:
-        """Apply the action to the game state and return a new game state."""
-        pass
-
-    @staticmethod
-    def rotate(piece: Piece, direction: Literal["left", "right"], board: Board) -> Piece:
-        if direction == "left":
-            rotated_shape = np.rot90(piece.shape, -1)
-        elif direction == "right":
-            rotated_shape = np.rot90(piece.shape, 1)
-        else:
-            raise ValueError("Invalid rotation direction (btw this should never be called, what dio you do?)")
-
-        wall_kick_offsets = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
-
-        for dx, dy in wall_kick_offsets:
-            new_position = (piece.position[0] + dx, piece.position[1] + dy)
-            new_piece = replace(piece, shape=rotated_shape, position=new_position)
-            if not board.collision(new_piece):
-                new_orientation = (piece.orientation + (1 if direction == "right" else -1)) % 4
-                return replace(new_piece, orientation=new_orientation)
-        return piece
-
-    @staticmethod
-    def move(piece: Piece, dx: int, dy: int) -> Piece:
-        new_position = (piece.position[0] + dx, piece.position[1] + dy)
-        return replace(piece, position=new_position)
-
-    # Define the less-than comparison based on priority
-    def __lt__(self, other: "Action") -> bool:
-        return self.priority < other.priority
-
-    # Define equality based on priority
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Action):
-            return False
-        return self.priority == other.priority
-
-
-@dataclass(frozen=True)
-class MoveLeft(Action):
-    priority = 1
-
-    @staticmethod
-    def apply(state: GameState) -> GameState:
-        piece = Action.move(state.current_piece, dx=-1, dy=0)
-        if state.board.collision(piece):
-            # Undo move by not changing the piece
-            return state
-        return replace(state, **{"current_piece": piece})
-
-
-@dataclass(frozen=True)
-class MoveRight(Action):
-    priority = 1
-
-    @staticmethod
-    def apply(state: GameState) -> GameState:
-        piece = Action.move(state.current_piece, dx=1, dy=0)
-        if state.board.collision(piece):
-            # Undo move by not changing the piece
-            return state
-        return replace(state, **{"current_piece": piece})
-
-
-@dataclass(frozen=True)
-class RotateLeft(Action):
-    priority = 1
-
-    @staticmethod
-    def apply(state: GameState) -> GameState:
-        piece = Action.rotate(state.current_piece, direction="left", board=state.board)
-        if state.board.collision(piece):
-            # Undo move by not changing the piece
-            return state
-        return replace(state, **{"current_piece": piece})
-
-
-@dataclass(frozen=True)
-class RotateRight(Action):
-    priority = 1
-
-    @staticmethod
-    def apply(state: GameState) -> GameState:
-        piece = Action.rotate(state.current_piece, direction="right", board=state.board)
-        if state.board.collision(piece):
-            # Undo move by not changing the piece
-            return state
-        return replace(state, **{"current_piece": piece})
-
-
-@dataclass(frozen=True)
-class SoftDrop(Action):
-    priority = 2
-
-    @staticmethod
-    def apply(state: GameState) -> GameState:
-        piece = Action.move(state.current_piece, dx=0, dy=1)
-        if state.board.collision(piece):
-            # Undo move by not changing the piece
-            return state
-        return replace(state, **{"current_piece": piece})
-
-
-@dataclass(frozen=True)
-class HardDrop(Action):
-    priority = 4
-
-    @staticmethod
-    def apply(state: GameState) -> GameState:
-        piece = state.current_piece
-        while not state.board.collision(piece := Action.move(piece, dx=0, dy=1)):
-            continue
-
-        board, lines_cleared = state.board.place_piece(piece).clear_lines()
-
-        state = replace(state, board=board).calculate_score(lines_cleared)
-
-        piece, *next_pieces = state.next_pieces
-
-        return replace(
-            state,
-            current_piece=board.set_spawn_position(piece),
-            next_pieces=next_pieces,
-            hold_used=False,
-            lock_delay_counter=0,
-            game_over=board.collision(piece),
-        )
-
-
-@dataclass(frozen=True)
-class Hold(Action):
-
-    priority = 5
-
-    @staticmethod
-    def apply(state: GameState) -> GameState:
-        if state.hold_used:
-            return state
-        if state.held_piece:
-            return replace(
-                state,
-                current_piece=state.board.set_spawn_position(state.held_piece),
-                held_piece=state.current_piece,
-                hold_used=True,
-            )
-        else:
-            piece, *remaining_pieces = state.next_pieces
-            return replace(
-                state,
-                current_piece=state.board.set_spawn_position(piece),
-                next_pieces=remaining_pieces,
-                held_piece=state.current_piece,
-                hold_used=True,
-            )
-
-
-@dataclass(frozen=True)
-class Idle(Action):
-
-    @staticmethod
-    def apply(state: GameState) -> GameState:
-        return state  # Do nothing
-
-
-class GameAction(Enum):
-    MOVE_LEFT = (MoveLeft, auto())
-    MOVE_RIGHT = (MoveRight, auto())
-    ROTATE_LEFT = (RotateLeft, auto())
-    ROTATE_RIGHT = (RotateRight, auto())
-    HARD_DROP = (HardDrop, auto())
-    SOFT_DROP = (SoftDrop, auto())
-    HOLD = (Hold, auto())
-    IDLE = (Idle, auto())
-
-    def __init__(self, action_class, index):
-        self.action_class = action_class
-        self.index = index
-
-    @classmethod
-    def from_str(cls, action_name: str) -> "GameAction | None":
-        try:
-            return cls[action_name.upper()]
-        except KeyError:
-            return None
-
-    @classmethod
-    def is_valid(cls, action_name: str) -> bool:
-        return cls.from_str(action_name) is not None
-
-    @classmethod
-    def from_index(cls, index: int) -> "GameAction | None":
-        return next((action for action in cls if action.index == index), None)
-
-    @cached_property
-    @classmethod
-    def get_combinations(cls):
-        return {action.index: [action.index] for action in cls}
 
 
 class TetrisEngine:
