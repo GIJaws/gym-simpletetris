@@ -26,7 +26,7 @@ class Board:
                 y = piece.position[1] + y_offset
                 if 0 <= x < board.width and 0 <= y < board.height:
                     new_grid[y, x] = color
-
+        # TODO Should I create new dataclass or use replace?????
         return Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height)
 
     def clear_lines(self) -> tuple["Board", int]:
@@ -38,6 +38,7 @@ class Board:
             new_grid_list.insert(0, np.zeros(board.width, dtype=int))
         new_grid = np.array(new_grid_list)
         return (
+            # TODO Should I create new dataclass or use replace?????
             Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height),
             lines_cleared,
         )

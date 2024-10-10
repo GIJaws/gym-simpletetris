@@ -78,22 +78,35 @@ class GameState:
     lock_delay_counter: int = 0
     MAX_LOCK_DELAY: int = 30  # TODO IDK WHAT TO PUT HERE
     current_time: int = 0
+    gravity_interval: float = field(init=False)
+    gravity_timer: int = 0
+    piece_timer: int = 0
 
-    action_history: tuple["Action", ...] = field(default_factory=tuple)
+    action_history: tuple[tuple["Action", ...], ...] = field(default_factory=tuple)
 
     # TODO have list that keeps track of actions (list[list[int]]), the score for each time step, and the number of lines cleared for each time step
+    # TODO need to implement gravity interval so pieces aren't falling every time step
     def __post_init__(self):
+        object.__setattr__(self, "gravity_interval", self._calculate_gravity_interval())
+        # self.gravity_interval = self._calculate_gravity_interval()
         if len(self.next_pieces) == 0:
             raise ValueError("next_pieces must contain at least one piece.")
+
+    def _calculate_gravity_interval(self) -> int:
+        if self.level == 0:
+            return 0
+        base_interval = 60  # Starting interval for level 1
+        difficulty_factor = 0.2  # Adjust this to control difficulty progression
+        return max(1, int(base_interval * math.exp(-difficulty_factor * (self.level - 1))))
 
     def step(self, actions: list["Action"]) -> "GameState":
 
         state = self.apply_actions(actions)
+        state = replace(state, gravity_timer=state.gravity_timer + 1, piece_timer=state.piece_timer + 1)
 
         if not state.game_over:
-            state = state.apply_gravity_handle_piece_locking()
-            state = state.update_game_state()
-            state.calculate_score(state.total_lines_cleared - self.total_lines_cleared)
+            state = state.process_game_step()
+            state = state.calculate_score(state.total_lines_cleared - self.total_lines_cleared)
 
         return replace(state, current_time=state.current_time + 1)
 
@@ -105,37 +118,52 @@ class GameState:
             state = action.apply(state)
         return state
 
-    def apply_gravity_handle_piece_locking(self) -> "GameState":
+    def process_game_step(self) -> "GameState":
+        """
+        Handles gravity and piece locking. Applies gravity if the current piece is not colliding with the board, if
+        the current piece is colliding with the board, it increments the lock delay counter.
+        If the lock delay counter reaches a threshold, it triggers a hard drop of the current piece, clears any lines,
+        and updates the game state. Otherwise, it simply moves the current piece down one cell.
+        """
         state = self
-        piece_after_gravity = Action.move(state.current_piece, dx=0, dy=1)
+        if self.gravity_timer >= self.gravity_interval and self.gravity_interval:
+            # We've reached the gravity interval, so move the current piece down one cell
+            state = replace(state, current_piece=Action.move(state.current_piece, dx=0, dy=1), gravity_timer=0)
 
-        if state.board.collision(piece_after_gravity):
+        if state.board.collision(state.current_piece):
+            # The current piece is colliding with the board, so increment the lock delay counter
             lock_delay_counter = state.lock_delay_counter + 1
         else:
+            # The current piece is not colliding with the board, so reset the lock delay counter
             lock_delay_counter = 0
 
-        state = replace(state, current_piece=piece_after_gravity, lock_delay_counter=lock_delay_counter)
+        state = replace(state, lock_delay_counter=lock_delay_counter)
 
         if state.lock_delay_counter < state.MAX_LOCK_DELAY:
+            # The lock delay counter hasn't reached the threshold, so return the current state
             return state
 
-        board_after_clear, lines_cleared = state.board.place_piece(state.current_piece).clear_lines()
-        return replace(state, board=board_after_clear, lines_cleared=state.total_lines_cleared + lines_cleared)
+        # The lock delay counter has reached the threshold, so it's time to trigger a hard drop
 
-    def update_game_state(self) -> "GameState":
-        state = self
+        # Place the current piece on the board and clear any lines
+        board, lines_cleared = state.board.place_piece(state.current_piece).clear_lines()
 
-        # TODO NEED TO CHECK IF A NEW PIECE IS EVEN NEEDED, SHOULD ONLY HAPPEN IF GRAVITY HAS LOCKED IT AS HARDDROP AND HOLD HANDLE THE NEXT PIECE LOGIC
+        # Get the next piece from the queue and set its spawn position
         next_piece, *remaining_pieces = state.next_pieces
-        new_current_piece = state.board.set_spawn_position(next_piece)
+        next_piece = state.board.set_spawn_position(next_piece)
 
+        # Update the game state with the new piece, cleared lines, and game over status
         state = replace(
             state,
-            current_piece=new_current_piece,
+            board=board,
+            current_piece=next_piece,
             next_pieces=remaining_pieces,
+            piece_timer=0,
+            lines_cleared=state.total_lines_cleared + lines_cleared,
+            game_over=state.board.collision(next_piece),
         )
 
-        return replace(state, game_over=state.board.collision(state.current_piece))
+        return state
 
     def calculate_score(self, lines_cleared) -> "GameState":
         """
@@ -148,8 +176,17 @@ class GameState:
 
         if total_lines // 10 > self.level - 1:
             new_level += 1
+            new_gravity_interval = self._calculate_gravity_interval()
+        else:
+            new_gravity_interval = self.gravity_interval
 
-        return replace(self, score=new_score, lines_cleared=total_lines, level=new_level)
+        return replace(
+            self,
+            score=new_score,
+            total_lines_cleared=total_lines,
+            level=new_level,
+            gravity_interval=new_gravity_interval,
+        )
 
     def get_full_board(self) -> Board:
         # Method to get a board with the current piece included, if needed for rendering or other purposes
