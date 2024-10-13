@@ -96,3 +96,16 @@ class Board:
         spawn_x = (self.width - piece_width) // 2 - min_x
         spawn_y = self.buffer_height - 1
         return (spawn_x, spawn_y)
+
+    def calculate_well_sums(self) -> np.ndarray:
+        """
+        Calculate the well sums of the board.
+        """
+        heights = self.get_column_heights()
+        wells = np.zeros_like(heights)
+        for i in range(len(heights)):
+            left = heights[i - 1] if i > 0 else heights[i]
+            right = heights[i + 1] if i < len(heights) - 1 else heights[i]
+            if heights[i].any() < left and heights[i].any() < right:
+                wells[i] = min(left, right) - heights[i]
+        return wells
