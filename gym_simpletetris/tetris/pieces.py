@@ -1,6 +1,5 @@
 import numpy as np
 from dataclasses import dataclass
-from functools import cached_property
 from enum import Enum
 import random
 
@@ -24,25 +23,24 @@ class PieceType(Enum):
     I = Piece("I", np.array(((0, 0), (0, -1), (0, -2), (0, -3))), 2, color=(255, 255, 0))  # Cyan
     O = Piece("O", np.array(((0, 0), (0, -1), (-1, 0), (-1, -1))), 1, color=(0, 255, 255))  # Yellow
 
-    @cached_property
-    @classmethod
-    def piece_names(cls) -> list[str]:
-        return [piece_type.name for piece_type in cls]
+    @staticmethod
+    def piece_names() -> list[str]:
+        return [piece_type.name for piece_type in PieceType]
 
 
 class PieceQueue:
     def __init__(self, preview_size=4):
         self.preview_size = max(1, preview_size)  # Ensure at least 1 piece in preview
-        self.pieces = []
-        self.bag = []
+        self.pieces: list[Piece] = []
+        self.bag: list[Piece] = []
         self.refill_bag()
         self.fill_queue()
 
     def refill_bag(self):
-        self.bag = list(*PieceType.piece_names)
+        self.bag = list(foo.value for foo in PieceType)
         random.shuffle(self.bag)
 
-    def next_piece(self):
+    def next_piece(self) -> Piece:
         if len(self.pieces) <= self.preview_size:
             self.fill_queue()
         return self.pieces.pop(0)

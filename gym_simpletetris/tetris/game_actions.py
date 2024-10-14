@@ -3,7 +3,7 @@ from gym_simpletetris.tetris.tetris_engine import Action, GameState
 
 from dataclasses import replace
 
-from enum import Enum, auto
+from enum import Enum
 
 
 from functools import cached_property
@@ -78,20 +78,7 @@ class HardDrop(Action):
         while not state.board.collision(piece := Action.move(piece, dx=0, dy=1)):
             continue
 
-        board, lines_cleared = state.board.place_piece(piece).clear_lines()
-
-        state = replace(state, board=board).calculate_score(lines_cleared)
-
-        piece, *next_pieces = state.next_pieces
-
-        return replace(
-            state,
-            current_piece=board.set_spawn_position(piece),
-            next_pieces=next_pieces,
-            hold_used=False,
-            lock_delay_counter=0,
-            game_over=board.collision(piece),
-        )
+        return replace(state, current_piece=piece).place_current_piece()
 
 
 class Hold(Action):
@@ -105,7 +92,7 @@ class Hold(Action):
         if state.held_piece:
             return replace(
                 state,
-                current_piece=state.board.set_spawn_position(state.held_piece),
+                current_piece=state.board.set_piece_spawn_position(state.held_piece),
                 held_piece=state.current_piece,
                 hold_used=True,
             )
@@ -113,7 +100,7 @@ class Hold(Action):
             piece, *remaining_pieces = state.next_pieces
             return replace(
                 state,
-                current_piece=state.board.set_spawn_position(piece),
+                current_piece=state.board.set_piece_spawn_position(piece),
                 next_pieces=remaining_pieces,
                 held_piece=state.current_piece,
                 hold_used=True,
@@ -128,16 +115,16 @@ class Idle(Action):
 
 
 class GameAction(Enum):
-    MOVE_LEFT = (MoveLeft, auto())
-    MOVE_RIGHT = (MoveRight, auto())
-    ROTATE_LEFT = (RotateLeft, auto())
-    ROTATE_RIGHT = (RotateRight, auto())
-    HARD_DROP = (HardDrop, auto())
-    SOFT_DROP = (SoftDrop, auto())
-    HOLD = (Hold, auto())
-    IDLE = (Idle, auto())
+    MOVE_LEFT = (MoveLeft, 0)
+    MOVE_RIGHT = (MoveRight, 1)
+    ROTATE_LEFT = (RotateLeft, 2)
+    ROTATE_RIGHT = (RotateRight, 3)
+    HARD_DROP = (HardDrop, 4)
+    SOFT_DROP = (SoftDrop, 5)
+    HOLD = (Hold, 6)
+    IDLE = (Idle, 7)
 
-    def __init__(self, action_class, index):
+    def __init__(self, action_class: type[Action], index: int):
         self.action_class = action_class
         self.index = index
 
@@ -153,8 +140,9 @@ class GameAction(Enum):
         return cls.from_str(action_name) is not None
 
     @classmethod
-    def from_index(cls, index: int) -> "GameAction | None":
-        return next((action for action in cls if action.index == index), None)
+    def from_index(cls, *indices: int) -> list[type["Action"]]:
+        # ! Assume indices are valid
+        return [action.action_class for action in cls if action.index in indices]
 
     @cached_property
     @classmethod

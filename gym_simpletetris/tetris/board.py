@@ -30,13 +30,26 @@ class Board:
         return Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height)
 
     def clear_lines(self) -> tuple["Board", int]:
+        """
+        Clear any completed lines and return the new board and the number of lines cleared.
+
+        Returns a tuple (new_board, lines_cleared) where new_board is the updated board state and lines_cleared is the
+        number of lines that were cleared.
+        """
         board = self
         new_grid = board.grid.copy()
-        new_grid_list = [row for row in new_grid if not np.all(row == 1)]
-        lines_cleared = board.height - len(new_grid_list)
+
+        # Find all the full lines in the grid
+        full_lines = [row for row in new_grid if np.all(row != 0)]
+
+        # Create a new grid by removing the full lines and adding new empty lines at the top
+        new_grid_list = [row for row in new_grid if not np.all(row != 0)]
+        lines_cleared = len(full_lines)
         for _ in range(lines_cleared):
             new_grid_list.insert(0, np.zeros(board.width, dtype=int))
         new_grid = np.array(new_grid_list)
+
+        # Return the new board and the number of lines cleared
         return (
             # TODO Should I create new dataclass or use replace?????
             Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height),
@@ -59,9 +72,9 @@ class Board:
     @staticmethod
     def simplify_board(board: np.ndarray) -> np.ndarray:
         if board.ndim == 3:
-            return np.any(board != 0, axis=2).astype(np.float32)
+            return np.any(board != 0, axis=2).astype(np.float32)  # TODO should this be float32??????
         elif board.ndim == 2:
-            return board.astype(np.float32)
+            return board.astype(np.float32)  # TODO should this be float32??????
         else:
             raise ValueError("Invalid board shape. Expected 2D or 3D array.")
 
@@ -86,7 +99,8 @@ class Board:
         heights = self.grid.shape[1] - np.argmax(non_zero_mask, axis=1)
         return np.where(non_zero_mask.any(axis=1), heights, 0)
 
-    def set_spawn_position(self, piece: Piece) -> Piece:
+    def set_piece_spawn_position(self, piece: Piece) -> Piece:
+        # TODO would this make more sense being a method for Piece and not Board????
         return replace(piece, position=self.get_spawn_position(piece))
 
     def get_spawn_position(self, piece: Piece) -> tuple[int, int]:
