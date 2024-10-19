@@ -74,7 +74,7 @@ class GameState:
     game_over: bool = False  # TODO is it safe to default GameOver to false?
     hold_used: bool = False
     lock_delay_counter: int = 0
-    MAX_LOCK_DELAY: int = 0  # TODO IDK WHAT TO PUT HERE, 0 means as soon as it touches it is placed
+    MAX_LOCK_DELAY: int = 100  # TODO IDK WHAT TO PUT HERE, 0 means as soon as it touches it is placed
     current_time: int = 0
     gravity_interval: float = 0
     gravity_timer: int = 0
@@ -96,11 +96,22 @@ class GameState:
         return max(1, int(base_interval * math.exp(-difficulty_factor * (self.level - 1))))
 
     def step(self, actions: list[type[Action]]) -> "GameState":
+        print(f"{self.current_time=}")
+        # print(
+        #     # f"START: {self.current_time=}, {self.current_piece=}, {self.lock_delay_counter=}, {self.gravity_timer=}, {self.piece_timer=}, {self.board.count_holes()=}, {self.board.get_column_heights()=}, {self.board.calculate_well_sums()=}, {self.gravity_interval=}, {self.game_over=}"
+        #     f"START: {self.current_time=}, {self.current_piece=}, {self.lock_delay_counter=}, {self.gravity_timer=}, {self.piece_timer=}, {self.gravity_interval=}, {self.game_over=}"
+        # )
         state = replace(self, lines_cleared=0).apply_actions(actions)
         if not state.game_over:
             state = state.process_game_step()
 
-        return replace(state, info=state._generate_info())
+        state = replace(state, info=state._generate_info())
+        # print(
+        #     # f"END: {state.current_time=}, {state.current_piece=}, {state.lock_delay_counter=}, {state.gravity_timer=}, {state.piece_timer=}, {state.board.count_holes()=}, {state.board.get_column_heights()=}, {state.board.calculate_well_sums()=}, {state.gravity_interval=}, {state.game_over=}"
+        #     f"END: {state.current_time=}, {state.current_piece=}, {state.lock_delay_counter=}, {state.gravity_timer=}, {state.piece_timer=}, {state.gravity_interval=}, {state.game_over=}"
+        # )
+
+        return state
 
     def apply_actions(self, actions: list[type[Action]]) -> "GameState":
         state = self
@@ -116,31 +127,41 @@ class GameState:
         )
 
     def process_game_step(self) -> "GameState":
-        """TODO verify that this docstring is correct
-        Handles gravity and piece locking. Applies gravity if the current piece is not colliding with the board, if
-        the current piece is colliding with the board, it increments the lock delay counter.
-        If the lock delay counter reaches a threshold, it triggers a hard drop of the current piece, clears any lines,
-        and updates the game state. Otherwise, it simply moves the current piece down one cell.
-        """
         state = self
-        if state.gravity_timer >= state.gravity_interval and state.gravity_interval:
-            # We've reached the gravity interval, so move the current piece down one cell
-            state = replace(state, current_piece=Action.move(state.current_piece, dx=0, dy=1), gravity_timer=0)
+        current_piece = state.current_piece
+        lock_delay_counter = state.lock_delay_counter
+        is_collision = state.board.collision(state.current_piece)
+        gravity_timer = 0
+        if not is_collision and (state.gravity_timer >= state.gravity_interval) and state.gravity_interval:
+            # Only attempt to move down if not already colliding
+            if not state.board.collision(new_piece := Action.move(state.current_piece, dx=0, dy=1)):
+                current_piece = new_piece
+                lock_delay_counter = 0
+                print("Moved current piece down one cell")
+        elif not is_collision:
+            gravity_timer = state.gravity_timer + 1
+
+        state = replace(
+            state, gravity_timer=gravity_timer, current_piece=current_piece, lock_delay_counter=lock_delay_counter
+        )
 
         if state.board.collision(state.current_piece):
             # The current piece is colliding with the board, so increment the lock delay counter
             lock_delay_counter = state.lock_delay_counter + 1
+            print(f"Incremented lock delay counter to {lock_delay_counter}")
         else:
-            # The current piece is not colliding with the board, so reset the lock delay counter
-            lock_delay_counter = 0
+            # If the piece didn't move down, keep the current lock delay counter
+            lock_delay_counter = state.lock_delay_counter
 
         state = replace(state, lock_delay_counter=lock_delay_counter)
 
         if state.lock_delay_counter < state.MAX_LOCK_DELAY:
             # The lock delay counter hasn't reached the threshold, so return the current state
+            print(f"Lock delay counter is {state.lock_delay_counter}, returning current state")
             return state
 
-        # lock delay counter reached the threshold, time place the current piece on the board
+        # lock delay counter reached the threshold, time to place the current piece on the board
+        print("Lock delay counter reached threshold, placing current piece on the board")
         return state.place_current_piece()
 
     def calculate_score(self) -> "GameState":
@@ -187,29 +208,6 @@ class GameState:
         # Method to get a board with the current piece included, if needed for rendering or other purposes
         return self.board.place_piece(self.current_piece)
 
-    @staticmethod
-    def create_initial_game_state(
-        width, height, buffer_height, current_piece, next_pieces, initial_level, held_piece=None, is_color=False
-    ):
-        # Initialize the board and other game state components
-        total_height = height + buffer_height
-        if is_color:
-            grid = np.zeros((total_height, width, 3), dtype=np.uint8)
-        else:
-            grid = np.zeros((total_height, width), dtype=np.uint8)
-
-        board = Board(width=width, height=height, buffer_height=buffer_height, grid=grid)
-        score = 0
-
-        return GameState(
-            board=board,
-            current_piece=current_piece,
-            next_pieces=next_pieces,
-            held_piece=held_piece,
-            score=score,
-            level=initial_level,
-        )
-
     def _generate_info(self) -> dict:
         return {
             "score": self.score,
@@ -245,3 +243,26 @@ class GameState:
 
         # Return the final state with updated info
         return replace(new_state, info=new_state._generate_info())
+
+    @staticmethod
+    def create_initial_game_state(
+        width, height, buffer_height, current_piece, next_pieces, initial_level, held_piece=None, is_color=False
+    ):
+        # Initialize the board and other game state components
+        total_height = height + buffer_height
+        if is_color:
+            grid = np.zeros((width, total_height, 3), dtype=np.uint8)
+        else:
+            grid = np.zeros((width, total_height), dtype=np.uint8)
+
+        board = Board(width=width, height=height, buffer_height=buffer_height, grid=grid)
+        score = 0
+
+        return GameState(
+            board=board,
+            current_piece=board.set_piece_spawn_position(current_piece),
+            next_pieces=next_pieces,
+            held_piece=held_piece,
+            score=score,
+            level=initial_level,
+        )

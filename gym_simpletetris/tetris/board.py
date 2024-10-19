@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace, field
 
 @dataclass(frozen=True)
 class Board:
+    # TODO should I get rid of the width and height? and instead have a BaseBoard class and a BinaryBoard and RGBBoard?????
     width: int
     height: int
     buffer_height: int
@@ -20,14 +21,15 @@ class Board:
         board = self
         new_grid = board.grid.copy()
         color = piece.color if board.is_colour else 1
-        for x_offset, y_offset in np.ndindex(piece.shape.shape):
-            if piece.shape[x_offset, y_offset] == 1:
-                x = piece.position[0] + x_offset
-                y = piece.position[1] + y_offset
-                if 0 <= x < board.width and 0 <= y < board.height:
-                    new_grid[y, x] = color
+        for x_offset, y_offset in piece.shape:
+            x = piece.position[0] + x_offset
+            y = piece.position[1] + y_offset
+
+            if 0 <= x < board.width and 0 <= y < board.height:
+                new_grid[x, y] = color
         # TODO Should I create new dataclass or use replace?????
-        return Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height)
+        # return Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height)
+        return replace(self, grid=new_grid)
 
     def clear_lines(self) -> tuple["Board", int]:
         """
@@ -50,37 +52,40 @@ class Board:
         new_grid = np.array(new_grid_list)
 
         # Return the new board and the number of lines cleared
-        return (
-            # TODO Should I create new dataclass or use replace?????
-            Board(width=board.width, height=board.height, grid=new_grid, buffer_height=board.buffer_height),
-            lines_cleared,
-        )
+        return replace(self, grid=new_grid), lines_cleared
 
     def collision(self, piece: Piece) -> bool:
         """
         Check if the piece collides with the board boundaries or existing blocks.
         """
-        for x_offset, y_offset in np.argwhere(piece.shape):
+        print(f"{self.grid.shape=}, {piece.position=}")
+        for x_offset, y_offset in piece.shape:
             x = piece.position[0] + x_offset
             y = piece.position[1] + y_offset
             if x < 0 or x >= self.width or y < 0 or y >= self.height:
+                # print(f"{self.grid=}")
+                print(f" {y=}, {piece.position=}, {x_offset=}, {y_offset=}")
                 return True  # Out of bounds
-            if self.grid[y, x]:
+            if self.grid[x, y].any():
+                # print(f"{self.grid[y, x]=} {(x, y)=}, {piece.position=}, {x_offset=}, {y_offset=}")
                 return True  # Cell is already occupied
         return False
 
     @staticmethod
-    def simplify_board(board: np.ndarray) -> np.ndarray:
+    def _simplify_board(board: np.ndarray) -> np.ndarray:
         if board.ndim == 3:
-            return np.any(board != 0, axis=2).astype(np.float32)  # TODO should this be float32??????
+            return np.any(board != 0, axis=2).astype(np.uint8)  # TODO should this be uint8??????
         elif board.ndim == 2:
-            return board.astype(np.float32)  # TODO should this be float32??????
+            return board.astype(np.uint8)  # TODO should this be uint8??????
         else:
             raise ValueError("Invalid board shape. Expected 2D or 3D array.")
 
+    def simplify_board(self) -> np.ndarray:
+        return Board._simplify_board(self.grid)
+
     def count_holes(self):
         """Count the number of holes in the board."""
-        board = Board.simplify_board(self.grid) if self.is_colour else self.grid
+        board = self.simplify_board() if self.is_colour else self.grid
         holes = 0
 
         num_cols, num_rows = board.shape
@@ -101,9 +106,23 @@ class Board:
 
     def set_piece_spawn_position(self, piece: Piece) -> Piece:
         # TODO would this make more sense being a method for Piece and not Board????
-        return replace(piece, position=self.get_spawn_position(piece))
+        p = replace(piece, position=self.get_spawn_position(piece))
+        print(f"{p=}")
+        return p
 
     def get_spawn_position(self, piece: Piece) -> tuple[int, int]:
+        """
+        Calculate the spawn position of a piece on the board.
+
+        The spawn position is defined as the position that centers the piece horizontally
+        and places the top of the piece at the top of the buffer.
+
+        Args:
+            piece: The piece to calculate the spawn position for.
+
+        Returns:
+            A tuple (x, y) indicating the spawn position of the piece.
+        """
         x_values = [i for i, j in piece.shape]
         min_x, max_x = min(x_values), max(x_values)
         piece_width = max_x - min_x + 1

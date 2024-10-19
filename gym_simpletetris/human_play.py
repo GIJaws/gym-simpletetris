@@ -13,15 +13,16 @@ def play_tetris(render_mode="human", record_actions=False):
     env = gym.make(
         "SimpleTetris-v0",
         render_mode=render_mode,
+        obs_type="binary",
         width=10,
         height=20,
-        initial_level=1,
+        initial_level=20,
         buffer_height=20,
         visible_height=21,
         num_lives=1000,
-        render_fps=2,
+        render_fps=30,
     )
-    observation, info = env.reset()
+    observation, info = env.reset(seed=420)
     input_handler = HumanInputHandler(env.action_space, record_actions=record_actions)
 
     done = False

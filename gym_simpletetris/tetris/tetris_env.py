@@ -37,6 +37,9 @@ class TetrisEnv(gym.Env):
         render_fps=60,
         preview_size=4,
     ):
+        print(
+            f"Initializing TetrisEnv with width={width}, height={height}, buffer_height={buffer_height}, visible_height={visible_height}, obs_type={obs_type}, render_mode={render_mode}, window_size={window_size}, initial_level={initial_level}, num_lives={num_lives}, render_fps={render_fps}, preview_size={preview_size}"
+        )
         self.width = width
         self.height = height
         self.buffer_height = buffer_height
@@ -53,21 +56,23 @@ class TetrisEnv(gym.Env):
         self.observation_space = self._get_observation_space()
 
         self.total_steps = 0
+        self.num_lives = num_lives
+        self.deaths = 0
         self.piece_queue = PieceQueue(preview_size)
+        current_piece = self.piece_queue.next_piece()
+        next_pieces = tuple(self.piece_queue.get_preview())
         self.initial_game_state = GameState.create_initial_game_state(
             width=self.width,
             height=self.height,
             buffer_height=self.buffer_height,
-            current_piece=self.piece_queue.next_piece(),
-            next_pieces=tuple(self.piece_queue.get_preview()),
+            current_piece=current_piece,
+            next_pieces=next_pieces,
             initial_level=initial_level,
             held_piece=None,
             is_color=(obs_type == "rgb"),
         )
-        self.num_lives = num_lives
-        self.deaths = 0
 
-        self.game_state = self.initial_game_state
+        self.game_state = self.initial_game_state.create_reset_state(current_piece, next_pieces)
 
     def _create_renderer(self):
         if self.render_mode == "human":
@@ -100,7 +105,9 @@ class TetrisEnv(gym.Env):
             raise ValueError(f"Unsupported observation type: {self.obs_type}")
 
     def step(self, action):
-        actions = GameAction.from_index(action)
+        actions = GameAction.from_index(*action)
+        print(f"Stepping with action: {actions=}")
+        # actions = GameAction.from_index(action)
         og_score = self.game_state.score
         self.game_state = self.game_state.step(actions=actions)
 
@@ -122,6 +129,7 @@ class TetrisEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
+        print("Resetting TetrisEnv")
         super().reset(seed=seed, options=options)
 
         # Refill the bag with new random pieces
@@ -153,20 +161,21 @@ class TetrisEnv(gym.Env):
     def _get_observation(self):
         board = self.game_state.get_full_board().grid
         # Extract only the visible part of the board
-        visible_board = board[-self.visible_height :, :]
+        # visible_board = board[-self.visible_height :, :]
 
         if self.obs_type == "binary":
             # TODO probs will need to change this to return  `astype(np.uint8)`
             # TODO use gamestates methods to get bool board
-            return (visible_board != 0).astype(np.bool_)
+            return (board != 0).astype(np.uint8)
         elif self.obs_type in ["grayscale", "rgb"]:
-            return visible_board.astype(np.uint8)
+            return board.astype(np.uint8)
         else:
             raise ValueError(f"Unsupported observation type: {self.obs_type}")
 
     def render(self):
-
+        print("Rendering TetrisEnv")
         return self.renderer.render(self.game_state)
 
     def close(self):
+        print("Closing TetrisEnv")
         self.renderer.close()

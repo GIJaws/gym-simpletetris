@@ -9,6 +9,7 @@ class Piece:
     name: str
     shape: np.ndarray
     max_orientation: int
+    # TODO make position and color a named tuple
     position: tuple[int, int] = (-1, -1)  # default to invalid position
     orientation: int = 0  # 0 to 3 for the four possible orientations
     color: tuple[int, int, int] = (0, 0, 0)  # default color
