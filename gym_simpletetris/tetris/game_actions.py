@@ -75,8 +75,8 @@ class HardDrop(Action):
     @staticmethod
     def apply(state: GameState) -> GameState:
         piece = state.current_piece
-        while not state.board.collision(piece := Action.move(piece, dx=0, dy=1)):
-            continue
+        while not state.board.collision(_piece := Action.move(piece, dx=0, dy=1)):
+            piece = _piece
 
         return replace(state, current_piece=piece).place_current_piece()
 

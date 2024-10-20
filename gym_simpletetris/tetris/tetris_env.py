@@ -15,7 +15,8 @@ from gym_simpletetris.tetris.game_actions import GameAction
 class TetrisEnv(gym.Env):
     metadata = {
         "render_modes": ["human", "rgb_array"],
-        "obs_types": ["binary", "grayscale", "rgb"],
+        # "obs_types": ["binary", "grayscale", "rgb"],
+        "obs_types": ["binary"],
         "render_fps": 60,
         "initial_level": 1,
         "num_lives": 1,
@@ -37,9 +38,8 @@ class TetrisEnv(gym.Env):
         render_fps=60,
         preview_size=4,
     ):
-        print(
-            f"Initializing TetrisEnv with width={width}, height={height}, buffer_height={buffer_height}, visible_height={visible_height}, obs_type={obs_type}, render_mode={render_mode}, window_size={window_size}, initial_level={initial_level}, num_lives={num_lives}, render_fps={render_fps}, preview_size={preview_size}"
-        )
+        msg = f"Initialising TetrisEnv with width={width}, height={height}, buffer_height={buffer_height}, visible_height={visible_height}, obs_type={obs_type}, render_mode={render_mode}, window_size={window_size}, initial_level={initial_level}, num_lives={num_lives}, render_fps={render_fps}, preview_size={preview_size}"
+        print(msg)
         self.width = width
         self.height = height
         self.buffer_height = buffer_height
@@ -106,7 +106,7 @@ class TetrisEnv(gym.Env):
 
     def step(self, action):
         actions = GameAction.from_index(*action)
-        print(f"Stepping with action: {actions=}")
+        # print(f"Stepping with action: {actions=}")
         # actions = GameAction.from_index(action)
         og_score = self.game_state.score
         self.game_state = self.game_state.step(actions=actions)
@@ -159,7 +159,7 @@ class TetrisEnv(gym.Env):
     #         raise ValueError(f"Unsupported observation type: {self.obs_type}")
 
     def _get_observation(self):
-        board = self.game_state.get_full_board().grid
+        board = self.game_state.board.place_piece(self.game_state.current_piece).grid
         # Extract only the visible part of the board
         # visible_board = board[-self.visible_height :, :]
 

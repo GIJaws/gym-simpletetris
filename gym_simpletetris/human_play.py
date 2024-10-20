@@ -16,7 +16,7 @@ def play_tetris(render_mode="human", record_actions=False):
         obs_type="binary",
         width=10,
         height=20,
-        initial_level=20,
+        initial_level=1,
         buffer_height=20,
         visible_height=21,
         num_lives=1000,

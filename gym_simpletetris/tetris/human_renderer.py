@@ -1,5 +1,6 @@
 import pygame
 from gym_simpletetris.tetris.base_renderer import BaseRenderer
+from gym_simpletetris.tetris.tetris_engine import GameState
 
 
 class HumanRenderer(BaseRenderer):
@@ -18,20 +19,17 @@ class HumanRenderer(BaseRenderer):
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
 
-    def render(self, game_state):
+    def render(self, game_state: GameState):
         self.window.fill((0, 0, 0))  # Clear screen with black background
 
         # Use shared utility functions
-        board_blocks = self.format_blocks(game_state)
-        piece_blocks = self.render_piece_data(game_state.current_piece)
-        ghost_piece_blocks = self.render_piece_data(game_state.get_ghost_piece())
 
         # Render the board
-        self._render_blocks(self.format_blocks(game_state))
+        self._render_blocks(game_state.board.get_placed_blocks())
         # Render the ghost piece
-        self._render_blocks(ghost_piece_blocks, ghost=True)
+        self._render_blocks(game_state.get_ghost_piece().get_render_blocks(), ghost=True)
         # Render the current piece
-        self._render_blocks(piece_blocks)
+        self._render_blocks(game_state.current_piece.get_render_blocks())
         # Render UI elements
         self._render_ui(game_state)
 
@@ -40,7 +38,15 @@ class HumanRenderer(BaseRenderer):
 
         return None
 
-    def _render_blocks(self, blocks, ghost=False):
+    def _render_blocks(self, blocks: list[tuple[int, int, tuple[int, int, int]]], ghost: bool = False) -> None:
+        """
+        Render a list of blocks on the game board.
+
+        Args:
+            blocks (list[tuple[int, int, tuple[int, int, int]]]): A list of tuples containing the x, y coordinates
+                and the color of each block.
+            ghost (bool, optional): Whether to render the blocks as a ghost piece (outline only). Defaults to False.
+        """
         for x, y, color in blocks:
             # Adjust y to account for visible height
             y -= self.height - self.visible_height
@@ -59,7 +65,7 @@ class HumanRenderer(BaseRenderer):
                 pygame.draw.rect(self.window, color, rect)
                 pygame.draw.rect(self.window, (50, 50, 50), rect, 1)  # Grid lines
 
-    def _render_ui(self, game_state):
+    def _render_ui(self, game_state: GameState):
         x_offset = self.width * self.block_size + 10
         y_offset = 10
         gap = 30

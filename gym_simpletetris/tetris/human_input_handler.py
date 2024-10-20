@@ -20,9 +20,9 @@ class HumanInputHandler(InputHandler):
             pygame.K_d: 1,  # Move Right
             pygame.K_LEFT: 2,  # Rotate Left
             pygame.K_RIGHT: 3,  # Rotate Right
-            pygame.K_LSHIFT: 4,  # Hold/Swap
-            pygame.K_w: 5,  # Hard Drop
-            pygame.K_s: 6,  # Soft Drop
+            pygame.K_w: 4,  # Hard Drop
+            pygame.K_s: 5,  # Soft Drop
+            pygame.K_LSHIFT: 6,  # Hold/Swap
             pygame.K_ESCAPE: "quit",
         }
 
