@@ -56,23 +56,30 @@ class TetrisEnv(gym.Env):
         self.observation_space = self._get_observation_space()
 
         self.total_steps = 0
+
+        # TODO implement total_score and total_lines_cleared
+        self.total_score = None
+        self.total_lines_cleared = None
+
         self.num_lives = num_lives
+        self.current_lives = self.num_lives
         self.deaths = 0
+        self.initial_level = initial_level
+
         self.piece_queue = PieceQueue(preview_size)
-        current_piece = self.piece_queue.next_piece()
-        next_pieces = tuple(self.piece_queue.get_preview())
-        self.initial_game_state = GameState.create_initial_game_state(
+        self.game_state = self._create_initial_game_state()
+
+    def _create_initial_game_state(self):
+        self.piece_queue.refill_bag()
+        return GameState.create_initial_game_state(
             width=self.width,
             height=self.height,
             buffer_height=self.buffer_height,
-            current_piece=current_piece,
-            next_pieces=next_pieces,
-            initial_level=initial_level,
+            current_piece=self.piece_queue.next_piece(),
+            next_pieces=tuple(self.piece_queue.get_preview()),
+            initial_level=self.initial_level,
             held_piece=None,
-            is_color=(obs_type == "rgb"),
         )
-
-        self.game_state = self.initial_game_state.create_reset_state(current_piece, next_pieces)
 
     def _create_renderer(self):
         if self.render_mode == "human":
@@ -84,7 +91,7 @@ class TetrisEnv(gym.Env):
                 visible_height=self.visible_height,
                 obs_type=self.obs_type,
             )
-        elif self.render_mode in ["rgb_array", "grayscale"]:
+        elif self.render_mode in ["rgb_array"]:
             return ArrayRenderer(
                 width=self.width,
                 height=self.height + self.buffer_height,
@@ -98,7 +105,7 @@ class TetrisEnv(gym.Env):
         if self.obs_type == "binary":
             shape = (self.visible_height, self.width)
             return spaces.Box(low=0, high=1, shape=shape, dtype=np.uint8)
-        elif self.obs_type in ["grayscale", "rgb"]:
+        elif self.obs_type in ["rgb"]:
             shape = (self.visible_height, self.width, 3)
             return spaces.Box(low=0, high=255, shape=shape, dtype=np.uint8)
         else:
@@ -106,12 +113,8 @@ class TetrisEnv(gym.Env):
 
     def step(self, action):
         actions = GameAction.from_index(*action)
-        # print(f"Stepping with action: {actions=}")
-        # actions = GameAction.from_index(action)
-        og_score = self.game_state.score
         self.game_state = self.game_state.step(actions=actions)
 
-        # Check if we need to fetch more pieces
         while len(self.game_state.next_pieces) < self.piece_queue.preview_size:
             new_piece = self.piece_queue.next_piece()
             self.game_state = replace(self.game_state, next_pieces=tuple(self.game_state.next_pieces) + (new_piece,))
@@ -119,61 +122,54 @@ class TetrisEnv(gym.Env):
         if self.render_mode == "human":
             self.render()
 
-        # Return the standard Gym tuple
         observation = self._get_observation()
-        reward = self.game_state.score - og_score  # TODO this reward is a stub
-        terminated = self.game_state.game_over
-        truncated = False  # TODO define conditions for truncation
+        reward = self.game_state.step_score  # TODO this reward is just the current game score for this step
         info = self.game_state.info
 
+        if self.game_state.game_over:
+            self.current_lives -= 1
+
+            if self.current_lives > 0:
+                self.game_state = self._create_initial_game_state()
+                terminated = False
+            else:
+                # No lives left; end the game
+                terminated = True
+        else:
+            terminated = False
+        truncated = False  # TODO define conditions for truncation
+        info["lives_remaining"] = self.current_lives
+
+        # Return the standard Gym tuple
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
         print("Resetting TetrisEnv")
         super().reset(seed=seed, options=options)
 
-        # Refill the bag with new random pieces
-        self.piece_queue.refill_bag()
+        self.current_lives = self.num_lives
 
-        self.game_state = self.initial_game_state.create_reset_state(
-            self.piece_queue.next_piece(), tuple(self.piece_queue.get_preview())
-        )
+        # Refill the bag with new random pieces
+        self.game_state = self._create_initial_game_state()
 
         if self.render_mode == "human":
             self.render()
 
         return self._get_observation(), self.game_state.info
 
-    # def _get_observation(self):
-    #     board = self.game_state.get_full_board().grid
-    #     # Extract only the visible part of the board if necessary
-    #     visible_board = board[-self.renderer.visible_height :, :]
-
-    #     # TODO do I need to do this obs logic for simplifying the board? also this isn't concating the non visbile part of the board off?
-    #     if self.obs_type == "binary":
-    #         return (visible_board != 0).astype(np.uint8)
-    #     elif self.obs_type in ["grayscale", "rgb"]:
-    #         # TODO do we need to convert to grayscale here? probs using the renderer
-    #         return visible_board.astype(np.uint8)
-    #     else:
-    #         raise ValueError(f"Unsupported observation type: {self.obs_type}")
-
     def _get_observation(self):
         board = self.game_state.board.place_piece(self.game_state.current_piece).grid
         # Extract only the visible part of the board
+        # TODO do I need to do this obs logic for simplifying the board? also this isn't concating the non visbile part of the board off?
+
         # visible_board = board[-self.visible_height :, :]
 
-        if self.obs_type == "binary":
-            # TODO probs will need to change this to return  `astype(np.uint8)`
-            # TODO use gamestates methods to get bool board
-            return (board != 0).astype(np.uint8)
-        elif self.obs_type in ["grayscale", "rgb"]:
-            return board.astype(np.uint8)
+        if self.obs_type in ["binary", "rgb"]:
+            return board
         else:
             raise ValueError(f"Unsupported observation type: {self.obs_type}")
 
     def render(self):
-        print("Rendering TetrisEnv")
         return self.renderer.render(self.game_state)
 
     def close(self):

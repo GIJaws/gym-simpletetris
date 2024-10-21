@@ -72,9 +72,9 @@ class HumanRenderer(BaseRenderer):
 
         # Render available information from GameState
         for key, value in [
-            ("Score", game_state.score),
+            ("Score", game_state.step_score),
             ("Level", game_state.level),
-            ("Lines Cleared", game_state.total_lines_cleared),
+            ("Lines Cleared", game_state.lines_cleared),
             ("FPS", round(self.clock.get_fps(), 2)),
         ]:
             self._render_text(f"{key}: {value}", (x_offset, y_offset))

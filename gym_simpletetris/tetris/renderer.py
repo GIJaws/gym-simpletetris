@@ -119,7 +119,7 @@ class Renderer:
 
         # Render available information from GameState
         for key, value in [
-            ("Score", game_state.score),
+            ("Score", game_state.step_score),
             ("Level", game_state.level),
             ("FPS", round(self.clock.get_fps(), 2)),
         ]:
