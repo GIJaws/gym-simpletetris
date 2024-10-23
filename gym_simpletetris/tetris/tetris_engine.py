@@ -35,8 +35,8 @@ class Action(ABC):
 
         wall_kick_offsets = [(0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)]
 
-        pos_x = int(piece.position[0])
-        pos_y = int(piece.position[1])
+        pos_x = rotated_piece.position[0]
+        pos_y = rotated_piece.position[1]
 
         for dx, dy in wall_kick_offsets:
             new_position = (pos_x + dx, pos_y + dy)
@@ -83,7 +83,7 @@ class GameState:
 
     def step(self, actions: list[type[Action]]) -> "GameState":
 
-        state = replace(self, lines_cleared=0, score=0).apply_actions(actions)
+        state = replace(self, step_lines_cleared=0, step_score=0).apply_actions(actions)
         if not state.game_over:
             state = state.process_game_step()
 

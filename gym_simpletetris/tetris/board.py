@@ -9,7 +9,8 @@ class Board:
     buffer_height: int
     width: int
     height: int
-    grid: NDArray[np.uint8]  # assumption is that this is an immutable 2D grid
+    # ? Assumption that any changes must be made on a copy of the grid and not done inplace
+    grid: NDArray[np.uint8]  # A 2D grid where each cell is either 0 (False) or 1 (True)
     spawn_y: np.uint8 = field(init=False)
     total_height: int = field(init=False)
 
@@ -19,7 +20,7 @@ class Board:
 
     @staticmethod
     def create_board(width: int, height: int, buffer_height: int) -> "Board":
-        grid = np.packbits(np.zeros((width, (height + buffer_height)), dtype=np.uint8))
+        grid = np.zeros((width, height + buffer_height), dtype=np.uint8)  # Create a 2D grid initialized to False (0)
         return Board(buffer_height=buffer_height, width=width, height=height, grid=grid)
 
     def place_piece(self, piece: Piece, block: bool = True) -> "Board":
@@ -27,74 +28,53 @@ class Board:
         for x_offset, y_offset in piece.shape:
             x = piece.position[0] + x_offset
             y = piece.position[1] + y_offset
-            if (0 <= x < self.width) and (0 <= y < (self.total_height)):
-                byte_index = (x * (self.total_height) + y) // 8
-                bit_index = (x * (self.total_height) + y) % 8
-                if block:
-                    new_grid[byte_index] |= 1 << (7 - bit_index)
-                else:
-                    new_grid[byte_index] &= ~(1 << (7 - bit_index))
+            if 0 <= x < self.width and 0 <= y < self.total_height:
+                new_grid[x, y] = np.uint8(block)
         return replace(self, grid=new_grid)
 
     def clear_lines(self) -> tuple["Board", int]:
         new_grid = self.grid.copy()
         lines_cleared = 0
+
         for y in range(self.total_height):
-            if all(self._get_bit(x, y) for x in range(self.width)):
-                for above_y in range(y, self.total_height - 1):
-                    for x in range(self.width):
-                        self._set_bit(new_grid, x, above_y, self._get_bit(x, above_y + 1))
-                for x in range(self.width):
-                    self._set_bit(new_grid, x, self.total_height - 1, False)
+            if new_grid[:, y].all():  # If the entire row is filled
+                new_grid[:, 1 : y + 1] = new_grid[:, :y]  # Shift everything above the cleared line down
+                new_grid[:, 0] = 0  # Clear the top line
                 lines_cleared += 1
+
         return replace(self, grid=new_grid), lines_cleared
-
-    def _get_bit(self, x: int, y: int) -> bool:
-        byte_index = (x * (self.total_height) + y) // 8
-        bit_index = (x * (self.total_height) + y) % 8
-        return bool((self.grid[byte_index] & (1 << (7 - bit_index))).any())
-
-    def _set_bit(self, grid: np.ndarray, x: int, y: int, value: bool) -> None:
-        byte_index = (x * (self.total_height) + y) // 8
-        bit_index = (x * (self.total_height) + y) % 8
-        if value:
-            grid[byte_index] |= 1 << (7 - bit_index)
-        else:
-            grid[byte_index] &= ~(1 << (7 - bit_index))
 
     def collision(self, piece: Piece) -> bool:
         for x_offset, y_offset in piece.shape:
             x = piece.position[0] + x_offset
             y = piece.position[1] + y_offset
-            in_bounds = (0 <= x < self.width) and (0 <= y < (self.total_height))
-            if not in_bounds:
+            if not (0 <= x < self.width) or not (0 <= y < self.total_height):
                 return True  # Out of bounds
-            if self._get_bit(x, y):
+            if self.grid[x, y]:
                 return True  # Cell is already occupied
         return False
 
-    def count_holes(self):
+    def count_holes(self) -> int:
         holes = 0
         for x in range(self.width):
             found_block = False
             for y in range(self.total_height):
-                if self._get_bit(x, y):
+                if self.grid[x, y]:
                     found_block = True
                 elif found_block:
                     holes += 1
         return holes
 
-    def get_column_heights(self):
+    def get_column_heights(self) -> np.ndarray:
         heights = np.zeros(self.width, dtype=int)
         for x in range(self.width):
             for y in range(self.total_height):
-                if self._get_bit(x, y):
+                if self.grid[x, y]:
                     heights[x] = self.total_height - y
                     break
         return heights
 
     def set_piece_spawn_position(self, piece: Piece) -> Piece:
-        # TODO would this make more sense being a method for Piece and not Board????
         return replace(piece, position=self.get_spawn_position(piece))
 
     def get_spawn_position(self, piece: Piece) -> tuple[np.uint8, np.uint8]:
@@ -128,15 +108,8 @@ class Board:
         return wells
 
     def get_rgb_board(self) -> np.ndarray:
-        unpacked_grid = self.get_unpacked_binary_board()
-        rgb_grid = np.stack(3 * [unpacked_grid * 255], axis=-1)
-
+        rgb_grid = np.stack([self.grid * 255] * 3, axis=-1)
         return rgb_grid
-
-    def get_unpacked_binary_board(self) -> np.ndarray:
-        unpacked_grid = np.unpackbits(self.grid, axis=0).reshape(self.width, self.total_height)
-
-        return unpacked_grid
 
     def get_placed_blocks(self):
         """
@@ -148,19 +121,17 @@ class Board:
             list[tuple[int, int, tuple[int, int, int]]]: A list of placed blocks on the board.
         """
         blocks = []
-
         for x in range(self.width):
             for y in range(self.total_height):
-                if self._get_bit(x, y):
+                if self.grid[x, y]:
                     blocks.append((x, y, (255, 255, 255)))
         return blocks
 
     def __str__(self):
-        char_map = {True: "■", False: " "}
-        grid = [[char_map[self._get_bit(x, y)] for x in range(self.width)] for y in range(self.total_height)]
-
+        char_map = {1: "■", 0: " "}
         board_str = "\nBoard:\n"
-        for row in grid:
+        for y in range(self.total_height - 1, -1, -1):  # Start from top row
+            row = [char_map[self.grid[x, y]] for x in range(self.width)]
             board_str += "|" + " ".join(row) + "|\n"
         board_str += "+" + " -" * (self.width - 1) + " +"
 
