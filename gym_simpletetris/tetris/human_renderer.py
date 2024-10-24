@@ -1,5 +1,6 @@
 import pygame
 from gym_simpletetris.tetris.base_renderer import BaseRenderer
+from gym_simpletetris.tetris.pieces import Piece
 from gym_simpletetris.tetris.tetris_engine import GameState
 
 
@@ -13,26 +14,21 @@ class HumanRenderer(BaseRenderer):
         # Initialize Pygame and other attributes
         pygame.init()
         pygame.display.init()
-        window_height = self.visible_height * self.block_size
-        window_width = self.width * self.block_size
+        window_height = 700
+        window_width = 400
         self.window = pygame.display.set_mode((window_width, window_height))
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
 
     def render(self, game_state: GameState):
-        self.window.fill((0, 0, 0))  # Clear screen with black background
+        self.window.fill((0, 0, 0))  # ? Clear screen with black background
 
-        # Use shared utility functions
-
-        # Render the board
         self._render_blocks(game_state.board.get_placed_blocks())
-        # Render the ghost piece
         self._render_blocks(game_state.get_ghost_piece().get_render_blocks(), ghost=True)
-        # Render the current piece
         self._render_blocks(game_state.current_piece.get_render_blocks())
-        # Render UI elements
         self._render_ui(game_state)
 
+        pygame.event.pump()
         pygame.display.flip()
         self.clock.tick(self.fps)
 
@@ -68,7 +64,7 @@ class HumanRenderer(BaseRenderer):
     def _render_ui(self, game_state: GameState):
         x_offset = self.width * self.block_size + 10
         y_offset = 10
-        gap = 30
+        gap = 25
 
         # Render available information from GameState
         for key, value in [
@@ -94,14 +90,14 @@ class HumanRenderer(BaseRenderer):
         text_surface = self.font.render(text, True, (255, 255, 255))
         self.window.blit(text_surface, pos)
 
-    def _render_piece_preview(self, piece, pos, label):
+    def _render_piece_preview(self, piece: Piece, pos: tuple[int, int], label: str):
         preview_size = self.block_size * 4
         block_size = self.block_size
         spacing = 10  # Vertical spacing between pieces
 
         # Draw label
         self._render_text(label, pos)
-        pos = (pos[0], pos[1] + spacing)
+        pos = (pos[0], pos[1] + 2 * spacing)
 
         # Draw background
         rect = pygame.Rect(pos[0], pos[1], preview_size, preview_size)
@@ -109,10 +105,12 @@ class HumanRenderer(BaseRenderer):
         pygame.draw.rect(self.window, (255, 255, 255), rect, 1)  # Border
 
         # Center the piece in the preview
-        min_x = min(x for x, y in piece.shape)
-        max_x = max(x for x, y in piece.shape)
-        min_y = min(y for x, y in piece.shape)
-        max_y = max(y for x, y in piece.shape)
+        x_list = [x for x, _ in piece.shape]
+        y_list = [y for _, y in piece.shape]
+        min_x = min(x_list)
+        max_x = max(x_list)
+        min_y = min(y_list)
+        max_y = max(y_list)
         width = max_x - min_x + 1
         height = max_y - min_y + 1
 

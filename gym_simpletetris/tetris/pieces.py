@@ -22,7 +22,8 @@ class Piece:
 
     def rotate(self, clockwise: bool = True) -> "Piece":
         """
-        Rotate the piece clockwise or counterclockwise and return a new instance with the rotated shape.
+        Rotate the piece clockwise or counterclockwise and return a new instance with the rotated shape,
+        only if the max_orientation allows it.
 
         Parameters
         ----------
@@ -32,15 +33,18 @@ class Piece:
         Returns
         -------
         Piece
-            A new Piece instance with the rotated shape.
+            A new Piece instance with the rotated shape, or the original piece if rotation is not allowed.
         """
+        if self.max_orientation == 1:
+            return self  # No rotation allowed
+
         rotation_matrix = np.array([[0, -1], [1, 0]]) if clockwise else np.array([[0, 1], [-1, 0]])
         rotated_shape = self.shape @ rotation_matrix
 
+        new_orientation = (self.orientation + (1 if clockwise else -1)) % self.max_orientation
+
         # Return a new Piece instance with the rotated shape, keeping other attributes the same.
-        return replace(
-            self, shape=rotated_shape, orientation=(self.orientation + (1 if clockwise else -1)) % self.max_orientation
-        )
+        return replace(self, shape=rotated_shape, orientation=new_orientation)
 
     def get_render_blocks(self):
         """
@@ -50,7 +54,7 @@ class Piece:
             list: A list of tuples (x, y, color) representing each block of the piece.
         """
         x, y = self.position
-        blocks = [(x + j, y + i, self.color) for i, j in self.shape]
+        blocks = [(x + i, y + j, self.color) for i, j in self.shape]
         return blocks
 
     def __str__(self):

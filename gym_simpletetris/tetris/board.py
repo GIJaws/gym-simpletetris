@@ -20,16 +20,18 @@ class Board:
 
     @staticmethod
     def create_board(width: int, height: int, buffer_height: int) -> "Board":
+
         grid = np.zeros((width, height + buffer_height), dtype=np.uint8)  # Create a 2D grid initialized to False (0)
         return Board(buffer_height=buffer_height, width=width, height=height, grid=grid)
 
-    def place_piece(self, piece: Piece, block: bool = True) -> "Board":
+    def place_piece(self, piece: Piece, block: bool | np.uint8 = True) -> "Board":
+        block = np.uint8(block)
         new_grid = self.grid.copy()
         for x_offset, y_offset in piece.shape:
             x = piece.position[0] + x_offset
             y = piece.position[1] + y_offset
             if 0 <= x < self.width and 0 <= y < self.total_height:
-                new_grid[x, y] = np.uint8(block)
+                new_grid[x, y] = block
         return replace(self, grid=new_grid)
 
     def clear_lines(self) -> tuple["Board", int]:
@@ -111,7 +113,7 @@ class Board:
         rgb_grid = np.stack([self.grid * 255] * 3, axis=-1)
         return rgb_grid
 
-    def get_placed_blocks(self):
+    def get_placed_blocks(self) -> list[tuple[int, int, tuple[int, int, int]]]:
         """
         Returns a list of placed blocks on the board.
 
@@ -120,7 +122,7 @@ class Board:
         Returns:
             list[tuple[int, int, tuple[int, int, int]]]: A list of placed blocks on the board.
         """
-        blocks = []
+        blocks: list[tuple[int, int, tuple[int, int, int]]] = []
         for x in range(self.width):
             for y in range(self.total_height):
                 if self.grid[x, y]:
