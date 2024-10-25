@@ -11,6 +11,7 @@ class Board:
     height: int
     # ? Assumption that any changes must be made on a copy of the grid and not done inplace
     grid: NDArray[np.uint8]  # A 2D grid where each cell is either 0 (False) or 1 (True)
+    rgb_grid: NDArray[np.uint8]  # A 3D grid (width, height, 3) for RGB colors
     spawn_y: np.uint8 = field(init=False)
     total_height: int = field(init=False)
 
@@ -22,29 +23,35 @@ class Board:
     def create_board(width: int, height: int, buffer_height: int) -> "Board":
 
         grid = np.zeros((width, height + buffer_height), dtype=np.uint8)  # Create a 2D grid initialized to False (0)
-        return Board(buffer_height=buffer_height, width=width, height=height, grid=grid)
+        rgb_grid = np.zeros((width, height + buffer_height, 3), dtype=np.uint8)
+        return Board(buffer_height=buffer_height, width=width, height=height, grid=grid, rgb_grid=rgb_grid)
 
     def place_piece(self, piece: Piece, block: bool | np.uint8 = True) -> "Board":
         block = np.uint8(block)
         new_grid = self.grid.copy()
+        new_rgb_grid = self.rgb_grid.copy()
         for x_offset, y_offset in piece.shape:
             x = piece.position[0] + x_offset
             y = piece.position[1] + y_offset
             if 0 <= x < self.width and 0 <= y < self.total_height:
                 new_grid[x, y] = block
-        return replace(self, grid=new_grid)
+                new_rgb_grid[x, y] = piece.color
+        return replace(self, grid=new_grid, rgb_grid=new_rgb_grid)
 
     def clear_lines(self) -> tuple["Board", int]:
         new_grid = self.grid.copy()
+        new_rgb_grid = self.rgb_grid.copy()
         lines_cleared = 0
 
         for y in range(self.total_height):
             if new_grid[:, y].all():  # If the entire row is filled
                 new_grid[:, 1 : y + 1] = new_grid[:, :y]  # Shift everything above the cleared line down
                 new_grid[:, 0] = 0  # Clear the top line
+                new_rgb_grid[:, 1 : y + 1] = new_rgb_grid[:, :y]  # Shift RGB values as well
+                new_rgb_grid[:, 0] = [0, 0, 0]  # Clear the top line in RGB grid
                 lines_cleared += 1
 
-        return replace(self, grid=new_grid), lines_cleared
+        return replace(self, grid=new_grid, rgb_grid=new_rgb_grid), lines_cleared
 
     def collision(self, piece: Piece) -> bool:
         for x_offset, y_offset in piece.shape:
@@ -126,7 +133,7 @@ class Board:
         for x in range(self.width):
             for y in range(self.total_height):
                 if self.grid[x, y]:
-                    blocks.append((x, y, (255, 255, 255)))
+                    blocks.append((x, y, tuple(self.rgb_grid[x, y])))
         return blocks
 
     def __str__(self):

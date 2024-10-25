@@ -14,7 +14,7 @@ class HumanRenderer(BaseRenderer):
         # Initialize Pygame and other attributes
         pygame.init()
         pygame.display.init()
-        window_height = 700
+        window_height = 900
         window_width = 400
         self.window = pygame.display.set_mode((window_width, window_height))
         self.clock = pygame.time.Clock()
