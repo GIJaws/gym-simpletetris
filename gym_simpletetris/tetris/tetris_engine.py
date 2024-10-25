@@ -27,9 +27,9 @@ class Action(ABC):
     @staticmethod
     def rotate(piece: Piece, direction: Literal["left", "right"], board: Board) -> Piece:
         if direction == "left":
-            rotated_piece = piece.rotate(clockwise=False)
-        elif direction == "right":
             rotated_piece = piece.rotate(clockwise=True)
+        elif direction == "right":
+            rotated_piece = piece.rotate(clockwise=False)
         else:
             raise ValueError("Invalid rotation direction (btw this should never be called, what did you do?)")
 
