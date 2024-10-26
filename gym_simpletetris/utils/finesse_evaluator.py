@@ -1,7 +1,9 @@
+from typing_extensions import deprecated
 from gym_simpletetris.tetris.tetris_shapes import ACTION_NAME_TO_INDEX, SHAPE_NAMES, SHAPES, simplify_board
 
 
 #  TODO THIS IS HORRIBLE BUT I THINK IT WORKS BE VERY CAREFUL
+@deprecated("is anything even using this?")
 class FinesseEvaluator:
     def __init__(self, spawn_position, piece_name):
         """

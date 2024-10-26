@@ -5,11 +5,11 @@ import gymnasium as gym
 from gymnasium import spaces
 
 
-from gym_simpletetris.tetris.human_renderer import HumanRenderer
-from gym_simpletetris.tetris.array_renderer import ArrayRenderer
-from gym_simpletetris.tetris.pieces import PieceQueue
-from gym_simpletetris.tetris.tetris_engine import GameState
-from gym_simpletetris.tetris.game_actions import GameAction
+from gym_simpletetris.render.human_renderer import HumanRenderer
+from gym_simpletetris.render.array_renderer import ArrayRenderer
+from gym_simpletetris.core.pieces import PieceQueue
+from gym_simpletetris.core.tetris_engine import GameState
+from gym_simpletetris.core.game_actions import GameAction
 
 
 class TetrisEnv(gym.Env):

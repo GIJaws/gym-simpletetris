@@ -3,8 +3,8 @@ import numpy as np
 from pygame.draw import lines
 
 # from gym_simpletetris.tetris.finesse_evaluator import FinesseEvaluator
-from gym_simpletetris.tetris.pieces import Piece
-from gym_simpletetris.tetris.board import Board
+from gym_simpletetris.core.pieces import Piece
+from gym_simpletetris.core.board import Board
 import math
 
 from dataclasses import dataclass, replace, field
@@ -20,7 +20,7 @@ class Action(ABC):
     @abstractmethod
     def apply(state: "GameState") -> "GameState":
         """Apply the action to the game state and return a new game state."""
-        from gym_simpletetris.tetris.tetris_engine import GameState
+        from gym_simpletetris.core.tetris_engine import GameState
 
         pass
 

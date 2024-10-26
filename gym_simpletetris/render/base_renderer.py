@@ -1,7 +1,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
 
-from gym_simpletetris.tetris.tetris_engine import GameState
+from gym_simpletetris.core.tetris_engine import GameState
 
 
 class BaseRenderer(ABC):

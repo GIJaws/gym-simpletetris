@@ -1,4 +1,4 @@
-from gym_simpletetris.tetris.tetris_engine import Action, GameState
+from gym_simpletetris.core.tetris_engine import Action, GameState
 
 
 from dataclasses import replace

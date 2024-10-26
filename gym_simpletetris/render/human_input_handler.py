@@ -1,4 +1,4 @@
-from .input_handler import InputHandler
+from gym_simpletetris.input.input_handler import InputHandler
 import pygame
 
 

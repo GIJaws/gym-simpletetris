@@ -1,4 +1,4 @@
-from gym_simpletetris.tetris.base_renderer import BaseRenderer
+from gym_simpletetris.render.base_renderer import BaseRenderer
 
 
 class ArrayRenderer(BaseRenderer):

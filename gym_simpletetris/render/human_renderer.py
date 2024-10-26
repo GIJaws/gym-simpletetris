@@ -1,7 +1,7 @@
 import pygame
-from gym_simpletetris.tetris.base_renderer import BaseRenderer
-from gym_simpletetris.tetris.pieces import Piece
-from gym_simpletetris.tetris.tetris_engine import GameState
+from gym_simpletetris.render.base_renderer import BaseRenderer
+from gym_simpletetris.core.pieces import Piece
+from gym_simpletetris.core.tetris_engine import GameState
 
 
 class HumanRenderer(BaseRenderer):
@@ -15,7 +15,7 @@ class HumanRenderer(BaseRenderer):
         pygame.init()
         pygame.display.init()
         window_height = 900
-        window_width = 400
+        window_width = 900
         self.window = pygame.display.set_mode((window_width, window_height))
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
@@ -68,9 +68,11 @@ class HumanRenderer(BaseRenderer):
 
         # Render available information from GameState
         for key, value in [
-            ("Score", game_state.step_score),
+            ("Score", game_state.score),
             ("Level", game_state.level),
             ("Lines Cleared", game_state.lines_cleared),
+            ("Holes", game_state.board.count_holes()),
+            ("Well Sums", str(game_state.board.calculate_well_sums())),
             ("FPS", round(self.clock.get_fps(), 2)),
         ]:
             self._render_text(f"{key}: {value}", (x_offset, y_offset))

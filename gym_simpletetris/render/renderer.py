@@ -2,9 +2,8 @@ import pygame
 import numpy as np
 from typing import Literal
 
-from gym_simpletetris.tetris.tetris_engine import GameState
-from gym_simpletetris.tetris.board import Board
-from gym_simpletetris.tetris.pieces import Piece
+from gym_simpletetris.core.tetris_engine import GameState
+from gym_simpletetris.core.pieces import Piece
 
 
 class Renderer:

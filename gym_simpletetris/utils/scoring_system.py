@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
+from typing_extensions import deprecated
 import numpy as np
 
 
+@deprecated("is this being used?")
 class AbstractScoringSystem(ABC):
     @abstractmethod
     def calculate_step_reward(self) -> float:

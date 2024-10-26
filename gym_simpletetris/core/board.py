@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.typing import NDArray
-from gym_simpletetris.tetris.pieces import Piece
+from gym_simpletetris.core.pieces import Piece
 from dataclasses import dataclass, field, replace
 
 
