@@ -5,10 +5,10 @@ from gym_simpletetris.core.tetris_engine import GameState
 
 
 class HumanRenderer(BaseRenderer):
-    def __init__(self, width, height, obs_type, block_size=20, fps=60, visible_height=None, **kwargs):
+    def __init__(self, width, height, obs_type, block_size=20, visible_height=None, **kwargs):
         super().__init__(width, height, obs_type, **kwargs)
         self.block_size = block_size
-        self.fps = fps
+        self.fps = 0
         self.visible_height = visible_height or height
 
         # Initialize Pygame and other attributes

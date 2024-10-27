@@ -86,10 +86,9 @@ class TetrisEnv(gym.Env):
             return HumanRenderer(
                 width=self.width,
                 height=self.height + self.buffer_height,
-                block_size=self.window_size // self.visible_height,
-                fps=self.render_fps,
-                visible_height=self.visible_height,
                 obs_type=self.obs_type,
+                block_size=self.window_size // self.visible_height,
+                visible_height=self.visible_height,
             )
         elif self.render_mode in ["rgb_array"]:
             return ArrayRenderer(

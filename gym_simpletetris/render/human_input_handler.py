@@ -9,6 +9,8 @@ class HumanInputHandler(InputHandler):
         self.actions = []
 
         self.cooldowns = {k: 0 for k in range(8)}  # Cooldown for each action
+
+        # ? TODO verify the comment below about the timing
         self.das_delay = 8  # ~13.5ms at 60fps
         self.arr_delay = 3  # ~50 at 60fps
         self.das_timers = {}

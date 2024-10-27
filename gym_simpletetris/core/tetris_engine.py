@@ -156,7 +156,6 @@ class GameState:
     def place_current_piece(self) -> "GameState":
         # Method to place the current piece on the board and clear lines and then returns the updated GameState
 
-        print(f"Placing current piece {self.current_piece.name} at {self.current_piece.position}")
         board, step_lines_cleared = self.board.place_piece(self.current_piece).clear_lines()
         piece, *next_pieces = self.next_pieces
         piece = board.set_piece_spawn_position(piece)
