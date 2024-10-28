@@ -11,7 +11,7 @@ class Board:
     height: int
     # ? Assumption that any changes must be made on a copy of the grid and not done inplace
     grid: NDArray[np.uint8]  # A 2D grid where each cell is either 0 (False) or 1 (True)
-    rgb_grid: NDArray[np.uint8]  # A 3D grid (width, height, 3) for RGB colors
+    rgb_grid: NDArray[np.uint8]  # A 3D grid (height, width, 3) for RGB colors
     spawn_y: np.uint8 = field(init=False)
     total_height: int = field(init=False)
 
@@ -22,8 +22,8 @@ class Board:
     @staticmethod
     def create_board(width: int, height: int, buffer_height: int) -> "Board":
 
-        grid = np.zeros((width, height + buffer_height), dtype=np.uint8)  # Create a 2D grid initialized to False (0)
-        rgb_grid = np.zeros((width, height + buffer_height, 3), dtype=np.uint8)
+        grid = np.zeros((height + buffer_height, width), dtype=np.uint8)  # Create a 2D grid initialized to False (0)
+        rgb_grid = np.zeros((height + buffer_height, width, 3), dtype=np.uint8)
         return Board(buffer_height=buffer_height, width=width, height=height, grid=grid, rgb_grid=rgb_grid)
 
     def place_piece(self, piece: Piece, block: bool | np.uint8 = True) -> "Board":
@@ -34,8 +34,8 @@ class Board:
             x = piece.position[0] + x_offset
             y = piece.position[1] + y_offset
             if 0 <= x < self.width and 0 <= y < self.total_height:
-                new_grid[x, y] = block
-                new_rgb_grid[x, y] = piece.color
+                new_grid[y, x] = block
+                new_rgb_grid[y, x] = piece.color
         return replace(self, grid=new_grid, rgb_grid=new_rgb_grid)
 
     def clear_lines(self) -> tuple["Board", int]:
@@ -44,11 +44,11 @@ class Board:
         lines_cleared = 0
 
         for y in range(self.total_height):
-            if new_grid[:, y].all():  # If the entire row is filled
-                new_grid[:, 1 : y + 1] = new_grid[:, :y]  # Shift everything above the cleared line down
-                new_grid[:, 0] = 0  # Clear the top line
-                new_rgb_grid[:, 1 : y + 1] = new_rgb_grid[:, :y]  # Shift RGB values as well
-                new_rgb_grid[:, 0] = [0, 0, 0]  # Clear the top line in RGB grid
+            if new_grid[y, :].all():  # If the entire row is filled
+                new_grid[1 : y + 1, :] = new_grid[:y, :]  # Shift everything above the cleared line down
+                new_grid[0, :] = 0  # Clear the top line
+                new_rgb_grid[1 : y + 1, :] = new_rgb_grid[:y, :]  # Shift RGB values as well
+                new_rgb_grid[0, :] = [0, 0, 0]  # Clear the top line in RGB grid
                 lines_cleared += 1
 
         return replace(self, grid=new_grid, rgb_grid=new_rgb_grid), lines_cleared
@@ -59,7 +59,7 @@ class Board:
             y = piece.position[1] + y_offset
             if not (0 <= x < self.width) or not (0 <= y < self.total_height):
                 return True  # Out of bounds
-            if self.grid[x, y]:
+            if self.grid[y, x]:
                 return True  # Cell is already occupied
         return False
 
@@ -68,7 +68,7 @@ class Board:
         for x in range(self.width):
             found_block = False
             for y in range(self.total_height):
-                if self.grid[x, y]:
+                if self.grid[y, x]:
                     found_block = True
                 elif found_block:
                     holes += 1
@@ -78,7 +78,7 @@ class Board:
         heights = np.zeros(self.width, dtype=int)
         for x in range(self.width):
             for y in range(self.total_height):
-                if self.grid[x, y]:
+                if self.grid[y, x]:
                     heights[x] = self.total_height - y
                     break
         return heights
@@ -130,17 +130,17 @@ class Board:
             list[tuple[int, int, tuple[int, int, int]]]: A list of placed blocks on the board.
         """
         blocks: list[tuple[int, int, tuple[int, int, int]]] = []
-        for x in range(self.width):
-            for y in range(self.total_height):
-                if self.grid[x, y]:
-                    blocks.append((x, y, tuple(self.rgb_grid[x, y])))
+        for y in range(self.total_height):
+            for x in range(self.width):
+                if self.grid[y, x]:
+                    blocks.append((x, y, tuple(self.rgb_grid[y, x])))
         return blocks
 
     def __str__(self):
         char_map = {1: "■", 0: " "}
         board_str = "\nBoard:\n"
         for y in range(self.total_height - 1, -1, -1):  # Start from top row
-            row = [char_map[self.grid[x, y]] for x in range(self.width)]
+            row = [char_map[self.grid[y, x]] for x in range(self.width)]
             board_str += "|" + " ".join(row) + "|\n"
         board_str += "+" + " -" * (self.width - 1) + " +"
 

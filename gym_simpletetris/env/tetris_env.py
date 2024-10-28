@@ -16,7 +16,7 @@ class TetrisEnv(gym.Env):
     metadata = {
         "render_modes": ["human", "rgb_array"],
         # "obs_types": ["binary", "grayscale", "rgb"],
-        "obs_types": ["binary"],
+        "obs_types": ["binary", "rgb"],
         "render_fps": 60,
         "initial_level": 1,
         "num_lives": 1,
@@ -88,6 +88,7 @@ class TetrisEnv(gym.Env):
                 height=self.height + self.buffer_height,
                 obs_type=self.obs_type,
                 block_size=self.window_size // self.visible_height,
+                fps=self.render_fps,
                 visible_height=self.visible_height,
             )
         elif self.render_mode in ["rgb_array"]:
@@ -102,13 +103,13 @@ class TetrisEnv(gym.Env):
 
     def _get_observation_space(self):
         if self.obs_type == "binary":
-            shape = (self.visible_height, self.width)
-            return spaces.Box(low=0, high=1, shape=shape, dtype=np.uint8)
-        elif self.obs_type in ["rgb"]:
-            shape = (self.visible_height, self.width, 3)
-            return spaces.Box(low=0, high=255, shape=shape, dtype=np.uint8)
+            board_space = spaces.Box(low=0, high=1, shape=(self.visible_height, self.width), dtype=np.uint8)
+        elif self.obs_type == "rgb":
+            board_space = spaces.Box(low=0, high=255, shape=(self.visible_height, self.width, 3), dtype=np.uint8)
         else:
             raise ValueError(f"Unsupported observation type: {self.obs_type}")
+
+        return board_space
 
     def step(self, action):
         actions = GameAction.from_index(*action)
@@ -123,7 +124,8 @@ class TetrisEnv(gym.Env):
 
         observation = self._get_observation()
         reward = self.game_state.step_score  # TODO this reward is just the current game score for this step
-        info = self.game_state.info
+        info = self.game_state.info.copy()
+        info["game_state"] = self.game_state
 
         if self.game_state.game_over:
             self.current_lives -= 1
@@ -139,7 +141,6 @@ class TetrisEnv(gym.Env):
         truncated = False  # TODO define conditions for truncation
         info["lives_remaining"] = self.current_lives
 
-        # Return the standard Gym tuple
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
@@ -154,19 +155,29 @@ class TetrisEnv(gym.Env):
         if self.render_mode == "human":
             self.render()
 
-        return self._get_observation(), self.game_state.info
+        info = self.game_state.info.copy()
+        info["game_state"] = self.game_state
+
+        return self._get_observation(), info
 
     def _get_observation(self):
-        board = self.game_state.board.place_piece(self.game_state.current_piece).grid
-        # Extract only the visible part of the board
-        # TODO do I need to do this obs logic for simplifying the board? also this isn't concating the non visbile part of the board off?
+        board_with_piece = self.game_state.board.place_piece(self.game_state.current_piece)
 
-        # visible_board = board[-self.visible_height :, :]
-
-        if self.obs_type in ["binary", "rgb"]:
-            return board
+        if self.obs_type == "binary":
+            grid = board_with_piece.grid
+        elif self.obs_type == "rgb":
+            grid = board_with_piece.rgb_grid
         else:
             raise ValueError(f"Unsupported observation type: {self.obs_type}")
+
+        # Extract the visible part of the board
+        # visible_board = grid[:, -self.visible_height :].T  # Transpose to match (height, width)
+        visible_board = grid[-self.visible_height :, :].copy()
+
+        # Ensure the board has the correct dtype
+        observation = visible_board.astype(self.observation_space.dtype)
+
+        return observation
 
     def render(self):
         return self.renderer.render(self.game_state)
