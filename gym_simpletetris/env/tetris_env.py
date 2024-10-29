@@ -144,7 +144,6 @@ class TetrisEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed: int | None = None, options: dict[str, Any] | None = None):
-        print("Resetting TetrisEnv")
         super().reset(seed=seed, options=options)
 
         self.current_lives = self.num_lives
@@ -161,7 +160,7 @@ class TetrisEnv(gym.Env):
         return self._get_observation(), info
 
     def _get_observation(self):
-        board_with_piece = self.game_state.board.place_piece(self.game_state.current_piece)
+        board_with_piece = self.game_state.place_current_piece().board
 
         if self.obs_type == "binary":
             grid = board_with_piece.grid
