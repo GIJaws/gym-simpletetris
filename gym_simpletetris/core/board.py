@@ -33,7 +33,7 @@ class Board:
         for x_offset, y_offset in piece.shape:
             x = piece.position[0] + x_offset
             y = piece.position[1] + y_offset
-            if 0 <= x < self.width and 0 <= y < self.total_height:
+            if (0 <= x < self.width) and (0 <= y < self.total_height):
                 new_grid[y, x] = block
                 new_rgb_grid[y, x] = piece.color
         return replace(self, grid=new_grid, rgb_grid=new_rgb_grid)
@@ -54,13 +54,28 @@ class Board:
         return replace(self, grid=new_grid, rgb_grid=new_rgb_grid), lines_cleared
 
     def collision(self, piece: Piece) -> bool:
-        for x_offset, y_offset in piece.shape:
-            x = piece.position[0] + x_offset
-            y = piece.position[1] + y_offset
-            if not (0 <= x < self.width) or not (0 <= y < self.total_height):
-                return True  # Out of bounds
-            if self.grid[y, x]:
-                return True  # Cell is already occupied
+        x_offsets = piece.shape[:, 0]
+        y_offsets = piece.shape[:, 1]
+        x_positions = piece.position[0] + x_offsets
+        y_positions = piece.position[1] + y_offsets
+
+        # Convert positions to integers for indexing
+        x_positions = x_positions.astype(int)
+        y_positions = y_positions.astype(int)
+
+        # Check if any positions are out of bounds
+        x_in_bounds = (0 <= x_positions) & (x_positions < self.width)
+        y_in_bounds = (0 <= y_positions) & (y_positions < self.total_height)
+        in_bounds = x_in_bounds & y_in_bounds
+
+        if not np.all(in_bounds):
+            return True  # Out of bounds
+
+        # Check if any in-bounds positions are occupied
+        occupied = self.grid[y_positions, x_positions]
+        if np.any(occupied):
+            return True  # Cell is already occupied
+
         return False
 
     def count_holes(self) -> int:
@@ -154,7 +169,7 @@ class Board:
     def __str__(self):
         char_map = {1: "■", 0: " "}
         board_str = "\nBoard:\n"
-        for y in range(self.total_height - 1, -1, -1):  # Start from top row
+        for y in range(self.total_height):  # Start from top row
             row = [char_map[self.grid[y, x]] for x in range(self.width)]
             board_str += "|" + " ".join(row) + "|\n"
         board_str += "+" + " -" * (self.width - 1) + " +"

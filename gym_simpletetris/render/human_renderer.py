@@ -67,14 +67,18 @@ class HumanRenderer(BaseRenderer):
         gap = 25
 
         # Render available information from GameState
-        for key, value in [
+        info_to_display = [
             ("Score", game_state.score),
             ("Level", game_state.level),
             ("Lines Cleared", game_state.lines_cleared),
+            ("Piece Timer", game_state.piece_timer),
+            ("Gravity", f"Timer: {game_state.gravity_timer}, Interval: {round(game_state.gravity_interval, 2)}"),
+            ("Lock Delay", f"{game_state.lock_delay_counter}/{game_state.MAX_LOCK_DELAY}"),
             ("Holes", game_state.board.count_holes()),
-            ("Well Sums", str(game_state.board.calculate_well_sums())),
+            ("Well Sums", sum(game_state.board.calculate_well_sums())),
             ("FPS", round(self.clock.get_fps(), 2)),
-        ]:
+        ]
+        for key, value in info_to_display:
             self._render_text(f"{key}: {value}", (x_offset, y_offset))
             y_offset += gap
 

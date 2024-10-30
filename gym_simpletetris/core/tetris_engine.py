@@ -67,7 +67,7 @@ class GameState:
     game_over: bool = False  # TODO is it safe to default GameOver to false?
     hold_used: bool = False
     lock_delay_counter: int = 0
-    MAX_LOCK_DELAY: int = 10  # 100  # TODO IDK WHAT TO PUT HERE, 0 means as soon as it touches it is placed
+    MAX_LOCK_DELAY: int = 5  # 100  # TODO IDK WHAT TO PUT HERE, 0 means as soon as it touches it is placed
     current_time: int = 0
     gravity_interval: float = 0
     gravity_timer: int = 0
@@ -107,25 +107,26 @@ class GameState:
         current_piece = state.current_piece
         lock_delay_counter = state.lock_delay_counter
         gravity_timer = 0
-        if not state.board.collision(state.current_piece):
+        if not state.board.collision(new_piece := Action.move(current_piece, dx=0, dy=1)):
             if (state.gravity_timer >= state.gravity_interval) and state.gravity_interval:
-                if not state.board.collision(new_piece := Action.move(state.current_piece, dx=0, dy=1)):
-                    current_piece = new_piece
-                    lock_delay_counter = 0
+                current_piece = new_piece
+                lock_delay_counter = 0
             else:
                 gravity_timer = state.gravity_timer + 1
+        else:
+            print("piece is colliding")
 
         state = replace(
             state, gravity_timer=gravity_timer, current_piece=current_piece, lock_delay_counter=lock_delay_counter
         )
         lock_delay_counter = state.lock_delay_counter
 
-        if state.board.collision(state.current_piece) and state.MAX_LOCK_DELAY:
+        if state.board.collision(Action.move(state.current_piece, dx=0, dy=1)) and state.MAX_LOCK_DELAY != 0:
             lock_delay_counter += 1
 
         state = replace(state, lock_delay_counter=lock_delay_counter)
 
-        if state.lock_delay_counter < state.MAX_LOCK_DELAY or not state.MAX_LOCK_DELAY:
+        if state.lock_delay_counter < state.MAX_LOCK_DELAY or state.MAX_LOCK_DELAY == 0:
             return state
 
         return state.place_current_piece()
