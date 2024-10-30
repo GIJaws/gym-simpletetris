@@ -116,6 +116,21 @@ class Board:
                 wells[i] = min(left, right) - heights[i]
         return wells
 
+    def calculate_bumpiness(self) -> int:
+        """
+        Calculate the bumpiness of the board.
+
+        The bumpiness is defined as the sum of the absolute differences between adjacent columns.
+
+        Returns:
+            int: The bumpiness of the board.
+        """
+        heights = self.get_column_heights()
+        bumpiness = 0
+        for i in range(1, len(heights)):
+            bumpiness += abs(heights[i] - heights[i - 1])
+        return bumpiness
+
     def get_rgb_board(self) -> np.ndarray:
         rgb_grid = np.stack([self.grid * 255] * 3, axis=-1)
         return rgb_grid

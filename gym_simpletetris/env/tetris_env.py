@@ -112,6 +112,7 @@ class TetrisEnv(gym.Env):
         return board_space
 
     def step(self, action):
+        self.total_steps += 1
         actions = GameAction.from_index(*action)
         self.game_state = self.game_state.step(actions=actions)
 
