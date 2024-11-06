@@ -120,8 +120,8 @@ class GameAction(Enum):
     ROTATE_LEFT = (RotateLeft, 2)
     ROTATE_RIGHT = (RotateRight, 3)
     HARD_DROP = (HardDrop, 4)
-    # SOFT_DROP = (SoftDrop, 5)
     HOLD = (Hold, 5)
+    # SOFT_DROP = (SoftDrop, 5)
     # HOLD = (Hold, 6)
     # IDLE = (Idle, 7)
 

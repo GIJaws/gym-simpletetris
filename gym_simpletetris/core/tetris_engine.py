@@ -113,8 +113,6 @@ class GameState:
                 lock_delay_counter = 0
             else:
                 gravity_timer = state.gravity_timer + 1
-        else:
-            print("piece is colliding")
 
         state = replace(
             state, gravity_timer=gravity_timer, current_piece=current_piece, lock_delay_counter=lock_delay_counter
