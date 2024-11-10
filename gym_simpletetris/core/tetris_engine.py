@@ -67,7 +67,7 @@ class GameState:
     game_over: bool = False  # TODO is it safe to default GameOver to false?
     hold_used: bool = False
     lock_delay_counter: int = 0
-    MAX_LOCK_DELAY: int = 5  # 100  # TODO IDK WHAT TO PUT HERE, 0 means as soon as it touches it is placed
+    MAX_LOCK_DELAY: int = 1  # 100  # TODO IDK WHAT TO PUT HERE, 0 means as soon as it touches it is placed
     current_time: int = 0
     gravity_interval: float = 0
     gravity_timer: int = 0
@@ -190,6 +190,60 @@ class GameState:
         while not self.board.collision(_ghost_piece := Action.move(ghost_piece, dx=0, dy=1)):
             ghost_piece = _ghost_piece
         return ghost_piece
+
+    def get_float_board_grid(self) -> np.ndarray:
+        """
+        Generates a float representation of the board grid, where:
+        - Empty spaces: 0.0
+        - Current piece: 0.5
+        - Placed pieces: 1.0
+
+        The method leverages existing methods to efficiently create the grids.
+        """
+        # Step 1: Use the existing board grid to represent placed pieces
+        float_grid = self.board.grid.astype(float)
+        float_grid[float_grid > 0] = 1.0  # Set placed pieces to 1.0
+
+        # Step 2: Get the ghost piece and place it on a separate grid
+        # ghost_piece_board = self.board.place_piece(self.get_ghost_piece(), block=np.uint8(2))
+        # float_grid[ghost_piece_board.grid == np.uint8(2)] = 0.5  # Set ghost piece positions to 0.5
+
+        # Step 3: Get the current piece and place it on another grid
+        current_piece_board = self.board.place_piece(self.current_piece, block=np.uint8(2))
+        float_grid[current_piece_board.grid == np.uint8(2)] = 0.5  # Set current piece positions to 0.5
+
+        return float_grid
+
+    def get_multichannel_binary_grid(self) -> np.ndarray:
+        """
+        Generates a multichannel binary representation of the board grid.
+
+        Returns a 3D numpy array with the following channels:
+        0: Placed pieces
+        1: Current piece
+        2: Ghost piece
+
+        Each channel is a binary grid where 1 represents the presence of the respective element.
+
+        Returns:
+            np.ndarray: A 3D numpy array (height x width x 3) representing the game state.
+        """
+        height, width = self.board.grid.shape
+        multichannel_grid = np.zeros((height, width, 3), dtype=np.uint8)
+
+        # Channel 0: Placed pieces
+        multichannel_grid[:, :, 0] = self.board.grid > 0
+
+        # Channel 1: Current piece
+        current_piece_board = self.board.place_piece(self.current_piece, block=np.uint8(2))
+        multichannel_grid[:, :, 1] = current_piece_board.grid == np.uint8(2)
+
+        # Channel 2: Ghost piece
+        ghost_piece = self.get_ghost_piece()
+        ghost_piece_board = self.board.place_piece(ghost_piece, block=np.uint8(2))
+        multichannel_grid[:, :, 2] = ghost_piece_board.grid == np.uint8(2)
+
+        return multichannel_grid
 
     @staticmethod
     def create_initial_game_state(
