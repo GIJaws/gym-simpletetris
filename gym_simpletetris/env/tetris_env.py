@@ -5,11 +5,10 @@ import gymnasium as gym
 from gymnasium import spaces
 
 
-from gym_simpletetris.render.human_renderer import HumanRenderer
-from gym_simpletetris.render.array_renderer import ArrayRenderer
 from gym_simpletetris.core.pieces import PieceQueue
 from gym_simpletetris.core.tetris_engine import GameState
 from gym_simpletetris.core.game_actions import GameAction
+from gym_simpletetris.render.render_helper import create_renderer
 
 
 class TetrisEnv(gym.Env):
@@ -50,14 +49,22 @@ class TetrisEnv(gym.Env):
         self.render_fps = render_fps
 
         # Initialize the renderer
-        self.renderer = self._create_renderer()
-
+        self.renderer = create_renderer(
+            width=self.width,
+            height=self.height,
+            buffer_height=self.buffer_height,
+            visible_height=self.visible_height,
+            obs_type=self.obs_type,
+            render_mode=self.render_mode,
+            window_size=self.window_size,
+            render_fps=self.render_fps,
+        )
         self.action_space = spaces.Discrete(len(GameAction))
         self.observation_space = self._get_observation_space()
 
         self.total_steps = 0
 
-        # TODO implement total_score and total_lines_cleared
+        # TODO ??? implement total_score and total_lines_cleared????
         self.total_score = None
         self.total_lines_cleared = None
 
@@ -80,26 +87,6 @@ class TetrisEnv(gym.Env):
             initial_level=self.initial_level,
             held_piece=None,
         )
-
-    def _create_renderer(self):
-        if self.render_mode == "human":
-            return HumanRenderer(
-                width=self.width,
-                height=self.height + self.buffer_height,
-                obs_type=self.obs_type,
-                block_size=self.window_size // self.visible_height,
-                fps=self.render_fps,
-                visible_height=self.visible_height,
-            )
-        elif self.render_mode in ["rgb_array"]:
-            return ArrayRenderer(
-                width=self.width,
-                height=self.height + self.buffer_height,
-                visible_height=self.visible_height,
-                obs_type=self.obs_type,
-            )
-        else:
-            raise ValueError(f"Unsupported render mode: {self.render_mode}")
 
     def _get_observation_space(self):
         if self.obs_type == "binary":

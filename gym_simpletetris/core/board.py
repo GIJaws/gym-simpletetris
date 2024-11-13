@@ -131,6 +131,10 @@ class Board:
                 wells[i] = min(left, right) - heights[i]
         return wells
 
+    def calculate_total_well_sum(self) -> int:
+        wells = self.calculate_well_sums()
+        return int(np.sum(wells))
+
     def calculate_bumpiness(self) -> int:
         """
         Calculate the bumpiness of the board.

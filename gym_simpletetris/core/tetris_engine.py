@@ -204,11 +204,20 @@ class GameState:
         float_grid = self.board.grid.astype(float)
         float_grid[float_grid > 0] = 1.0  # Set placed pieces to 1.0
 
-        # Step 2: Get the ghost piece and place it on a separate grid
-        # ghost_piece_board = self.board.place_piece(self.get_ghost_piece(), block=np.uint8(2))
-        # float_grid[ghost_piece_board.grid == np.uint8(2)] = 0.5  # Set ghost piece positions to 0.5
+        # TODO set holes as -1
 
-        # Step 3: Get the current piece and place it on another grid
+        # Step 2: Identify and mark holes
+        column_heights = self.board.get_column_heights()
+        for col in range(self.board.width):
+            for row in range(self.board.height - 1, column_heights[col] - 1, -1):
+                if float_grid[row, col] == 0.0:
+                    float_grid[row, col] = -1.0  # Mark hole as -1.0
+
+        # Step 3: Get the ghost piece and place it on a separate grid
+        ghost_piece_board = self.board.place_piece(self.get_ghost_piece(), block=np.uint8(2))
+        float_grid[ghost_piece_board.grid == np.uint8(2)] = 0.25  # Set ghost piece positions to 0.5
+
+        # Step 4: Get the current piece and place it on another grid
         current_piece_board = self.board.place_piece(self.current_piece, block=np.uint8(2))
         float_grid[current_piece_board.grid == np.uint8(2)] = 0.5  # Set current piece positions to 0.5
 

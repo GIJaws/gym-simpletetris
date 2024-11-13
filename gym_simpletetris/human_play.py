@@ -2,10 +2,12 @@ import gymnasium as gym
 import sys
 import os
 
+
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, project_root)
 import gym_simpletetris
 from gym_simpletetris.render.human_input_handler import HumanInputHandler
+from gym_simpletetris.env.wrappers.performance_logging_wrapper import EnhancedPerformanceLoggingWrapper
 
 
 def play_tetris(render_mode="human", record_actions=False):
@@ -22,6 +24,7 @@ def play_tetris(render_mode="human", record_actions=False):
         num_lives=1000,
         render_fps=60,
     )
+    env = EnhancedPerformanceLoggingWrapper(env)
     observation, info = env.reset(seed=420)
     input_handler = HumanInputHandler(env.action_space, record_actions=record_actions)
 
@@ -36,6 +39,8 @@ def play_tetris(render_mode="human", record_actions=False):
             break
         # Calculate reward based on game state
         game_over = terminated or truncated
+
+        env.log_performance()
 
         if game_over:
             print(f"Game over! Final Score: {info['score']}")
