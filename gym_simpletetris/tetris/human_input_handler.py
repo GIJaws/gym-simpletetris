@@ -25,31 +25,57 @@ class HumanInputHandler(InputHandler):
             pygame.K_LSHIFT: 6,  # Hold/Swap
             pygame.K_ESCAPE: "quit",
         }
+        self.combination_action_map = {
+            # Movement + Rotation Combinations (valid)
+            (0, 4): 8,  # Move Left + Rotate Left
+            (0, 5): 9,  # Move Left + Rotate Right
+            (1, 4): 10,  # Move Right + Rotate Left
+            (1, 5): 11,  # Move Right + Rotate Right
+            # Movement + Soft Drop (valid)
+            (0, 3): 13,  # Move Left + Soft Drop
+            (1, 3): 16,  # Move Right + Soft Drop
+            # Hold/Swap should likely be sequential, so you can keep it as is:
+            (0, 6): 14,  # Move Left + Hold/Swap (may still be valid for input)
+            (1, 6): 17,  # Move Right + Hold/Swap
+            # Rotation + Soft Drop (valid)
+            (4, 3): 19,  # Rotate Left + Soft Drop
+            (5, 3): 22,  # Rotate Right + Soft Drop
+            # Rotation + Hold/Swap (questionable, but can keep for now)
+            (4, 6): 20,  # Rotate Left + Hold/Swap
+            (5, 6): 23,  # Rotate Right + Hold/Swap
+            # Hard Drop is instantaneous, so can reuse action ID `2`
+            (0, 2): 2,  # Move Left + Hard Drop (redundant movement, just drop)
+            (1, 2): 2,  # Move Right + Hard Drop
+            (4, 2): 2,  # Rotate Left + Hard Drop
+            (5, 2): 2,  # Rotate Right + Hard Drop
+        }
 
         # Automate action combination generation
-        self.combination_action_map = self.generate_combinations(self.key_action_map)
+        # self.combination_action_map = self.generate_combinations(self.key_action_map)
 
-    def generate_combinations(self, key_action_map):
-        # Define action groups that can logically be combined
-        movement_actions = [0, 1]  # Left, Right
-        rotation_actions = [4, 5]  # Rotate Left, Rotate Right
-        other_actions = [2, 3, 6]  # Hard Drop, Soft Drop, Hold/Swap
+        # def generate_combinations(self, key_action_map):
+        #     # Define action groups that can logically be combined
+        #     movement_actions = [0, 1]  # Left, Right
+        #     rotation_actions = [4, 5]  # Rotate Left, Rotate Right
+        #     other_actions = [2, 3, 6]  # Hard Drop, Soft Drop, Hold/Swap
 
-        # Create all valid combinations of these actions
-        valid_combinations = list(
-            itertools.chain(
-                itertools.product(movement_actions, rotation_actions),
-                itertools.product(movement_actions, other_actions),
-                itertools.product(rotation_actions, other_actions),
-            )
-        )
+        #     # Create all valid combinations of these actions
+        #     valid_combinations = list(
+        #         itertools.chain(
+        #             itertools.product(movement_actions, rotation_actions),
+        #             itertools.product(movement_actions, other_actions),
+        #             itertools.product(rotation_actions, other_actions),
+        #         )
+        #     )
 
-        # Map combinations to unique action values
-        combination_map = {}
-        for idx, combo in enumerate(valid_combinations, start=8):
-            combination_map[combo] = idx  # Start assigning actions from 8 upwards
+        # # Map combinations to unique action values
+        # combination_map = {}
+        # for idx, combo in enumerate(valid_combinations, start=8):
+        #     combination_map[combo] = idx  # Start assigning actions from 8 upwards
 
-        return combination_map
+        # logging.info(f"Generated combination map: {combination_map}")
+
+        # return combination_map
 
     def get_action(self, observation):
         keys = pygame.key.get_pressed()
