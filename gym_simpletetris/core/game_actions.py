@@ -114,6 +114,98 @@ class Idle(Action):
         return state  # Do nothing
 
 
+# TODO THESE ARE STUB FUNCTIONS NEED TO MAKE IT RETURN A LIST OR SOMETHING IDK
+# gym_simpletetris\core\game_actions.py
+
+
+class MoveLeftAndHardDrop(Action):
+    priority = 3  # Adjust priority as needed
+
+    @staticmethod
+    def apply(state: GameState) -> GameState:
+        # Apply MoveLeft action
+        state = MoveLeft.apply(state)
+        # Apply HardDrop action
+        return HardDrop.apply(state)
+
+
+class MoveRightAndHardDrop(Action):
+    priority = 3
+
+    @staticmethod
+    def apply(state: GameState) -> GameState:
+        # Apply MoveRight action
+        state = MoveRight.apply(state)
+        # Apply HardDrop action
+        return HardDrop.apply(state)
+
+
+class RotateLeftAndHardDrop(Action):
+    priority = 3
+
+    @staticmethod
+    def apply(state: GameState) -> GameState:
+        # Apply RotateLeft action
+        state = RotateLeft.apply(state)
+        # Apply HardDrop action
+        return HardDrop.apply(state)
+
+
+class RotateRightAndHardDrop(Action):
+    priority = 3
+
+    @staticmethod
+    def apply(state: GameState) -> GameState:
+        # Apply RotateRight action
+        state = RotateRight.apply(state)
+        # Apply HardDrop action
+        return HardDrop.apply(state)
+
+
+class MoveLeftAndRotateLeft(Action):
+    priority = 2  # Slightly higher priority than move or rotate alone
+
+    @staticmethod
+    def apply(state: GameState) -> GameState:
+        # Apply MoveLeft action
+        state = MoveLeft.apply(state)
+        # Apply RotateLeft action
+        return RotateLeft.apply(state)
+
+
+class MoveLeftAndRotateRight(Action):
+    priority = 2  # Slightly higher priority than move or rotate alone
+
+    @staticmethod
+    def apply(state: GameState) -> GameState:
+        # Apply MoveLeft action
+        state = MoveLeft.apply(state)
+        # Apply RotateRight action
+        return RotateRight.apply(state)
+
+
+class MoveRightAndRotateLeft(Action):
+    priority = 2
+
+    @staticmethod
+    def apply(state: GameState) -> GameState:
+        # Apply MoveRight action
+        state = MoveRight.apply(state)
+        # Apply RotateLeft action
+        return RotateLeft.apply(state)
+
+
+class MoveRightAndRotateRight(Action):
+    priority = 2
+
+    @staticmethod
+    def apply(state: GameState) -> GameState:
+        # Apply MoveRight action
+        state = MoveRight.apply(state)
+        # Apply RotateRight action
+        return RotateRight.apply(state)
+
+
 class GameAction(Enum):
     MOVE_LEFT = (MoveLeft, 0)
     MOVE_RIGHT = (MoveRight, 1)
@@ -124,6 +216,16 @@ class GameAction(Enum):
     # SOFT_DROP = (SoftDrop, 5)
     # HOLD = (Hold, 6)
     # IDLE = (Idle, 7)
+
+    # Compound Actions
+    # MOVE_LEFT_HARD_DROP = (MoveLeftAndHardDrop, 6)
+    # MOVE_RIGHT_HARD_DROP = (MoveRightAndHardDrop, 7)
+    # ROTATE_LEFT_HARD_DROP = (RotateLeftAndHardDrop, 8)
+    # ROTATE_RIGHT_HARD_DROP = (RotateRightAndHardDrop, 9)
+    # MOVE_LEFT_ROTATE_LEFT = (MoveLeftAndRotateLeft, 10)
+    # MOVE_RIGHT_ROTATE_RIGHT = (MoveRightAndRotateRight, 11)
+    # MOVE_LEFT_ROTATE_RIGHT = (MoveLeftAndRotateRight, 12)
+    # MOVE_RIGHT_ROTATE_LEFT = (MoveRightAndRotateLeft, 13)
 
     def __init__(self, action_class: type[Action], index: int):
         self.action_class = action_class
