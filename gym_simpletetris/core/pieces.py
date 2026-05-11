@@ -12,7 +12,7 @@ class Piece:
     shape: NDArray[np.int8]
     max_orientation: int
     # TODO make position and color a named tuple
-    position: tuple[np.uint8, np.uint8] = (np.uint8(0), np.uint8(0))
+    position: tuple[int, int] = (0, 0)
     orientation: int = 0  # 0 to 3 for the four possible orientations
     color: tuple[int, int, int] = (0, 0, 0)  # default color
 

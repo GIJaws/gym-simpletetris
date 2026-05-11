@@ -12,11 +12,11 @@ class Board:
     # ? Assumption that any changes must be made on a copy of the grid and not done inplace
     grid: NDArray[np.uint8]  # A 2D grid where each cell is either 0 (False) or 1 (True)
     rgb_grid: NDArray[np.uint8]  # A 3D grid (height, width, 3) for RGB colors
-    spawn_y: np.uint8 = field(init=False)
+    spawn_y: int = field(init=False)
     total_height: int = field(init=False)
 
     def __post_init__(self):
-        object.__setattr__(self, "spawn_y", np.uint8(self.buffer_height - 1))
+        object.__setattr__(self, "spawn_y", self.buffer_height - 1)
         object.__setattr__(self, "total_height", self.height + self.buffer_height)
 
     @staticmethod
@@ -101,7 +101,7 @@ class Board:
     def set_piece_spawn_position(self, piece: Piece) -> Piece:
         return replace(piece, position=self.get_spawn_position(piece))
 
-    def get_spawn_position(self, piece: Piece) -> tuple[np.uint8, np.uint8]:
+    def get_spawn_position(self, piece: Piece) -> tuple[int, int]:
         """
         Calculate the spawn position of a piece on the board.
 
@@ -117,7 +117,7 @@ class Board:
         x_values = [i for i, j in piece.shape]
         min_x, max_x = min(x_values), max(x_values)
         piece_width = max_x - min_x + 1
-        spawn_x = np.uint8((self.width - piece_width) // 2 - min_x)
+        spawn_x = int((self.width - piece_width) // 2 - min_x)
 
         return (spawn_x, self.spawn_y)
 
