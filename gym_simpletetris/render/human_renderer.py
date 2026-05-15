@@ -2,14 +2,16 @@ import pygame
 from gym_simpletetris.render.base_renderer import BaseRenderer
 from gym_simpletetris.core.pieces import Piece
 from gym_simpletetris.core.tetris_engine import GameState
+from gym_simpletetris.render.extensions import RenderContext, RendererExtension
 
 
 class HumanRenderer(BaseRenderer):
-    def __init__(self, width, height, obs_type, block_size=20, fps=60, visible_height=None, **kwargs):
+    def __init__(self, width, height, obs_type, block_size=20, fps=60, visible_height=None, extensions=None, **kwargs):
         super().__init__(width, height, obs_type, **kwargs)
         self.block_size = block_size
         self.fps = fps
         self.visible_height = visible_height or height
+        self.extensions: list[RendererExtension] = list(extensions or [])
 
         # Initialize Pygame and other attributes
         pygame.init()
@@ -23,16 +25,58 @@ class HumanRenderer(BaseRenderer):
     def render(self, game_state: GameState):
         self.window.fill((0, 0, 0))  # ? Clear screen with black background
 
+        ctx = self._render_context(game_state)
+        for extension in tuple(self.extensions):
+            extension.before_board(ctx)
         self._render_blocks(game_state.board.get_placed_blocks())
-        self._render_blocks(game_state.get_ghost_piece().get_render_blocks(), ghost=True)
+        ghost_blocks = game_state.get_ghost_piece().get_render_blocks()
+        if not self._render_ghost_with_extensions(ctx, ghost_blocks):
+            self._render_blocks(ghost_blocks, ghost=True)
         self._render_blocks(game_state.current_piece.get_render_blocks())
+        for extension in tuple(self.extensions):
+            extension.after_board(ctx)
+        for extension in tuple(self.extensions):
+            extension.before_ui(ctx)
         self._render_ui(game_state)
+        for extension in tuple(self.extensions):
+            extension.after_ui(ctx)
 
         pygame.event.pump()
         pygame.display.flip()
         self.clock.tick(self.fps)
 
         return None
+
+    def add_extension(self, extension: RendererExtension) -> None:
+        self.extensions.append(extension)
+
+    def clear_extensions(self) -> None:
+        self.extensions.clear()
+
+    def _render_ghost_with_extensions(self, ctx: RenderContext, blocks) -> bool:
+        for extension in tuple(self.extensions):
+            render_ghost = getattr(extension, "render_ghost", None)
+            if render_ghost is not None and render_ghost(ctx, blocks):
+                return True
+        return False
+
+    def _render_context(self, game_state: GameState) -> RenderContext:
+        window_width, window_height = self.window.get_size()
+        board_width_px = self.width * self.block_size
+        board_height_px = self.visible_height * self.block_size
+        ui_x = board_width_px
+        return RenderContext(
+            surface=self.window,
+            game_state=game_state,
+            board_rect=(0, 0, board_width_px, board_height_px),
+            ui_rect=(ui_x, 0, max(0, window_width - ui_x), window_height),
+            window_size=(window_width, window_height),
+            block_size=self.block_size,
+            board_width=self.width,
+            board_height=self.height,
+            visible_height=self.visible_height,
+            fps=float(self.clock.get_fps()),
+        )
 
     def _render_blocks(self, blocks: list[tuple[int, int, tuple[int, int, int]]], ghost: bool = False) -> None:
         """

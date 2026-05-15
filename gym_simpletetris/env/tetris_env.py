@@ -36,6 +36,7 @@ class TetrisEnv(gym.Env):
         num_lives=1,
         render_fps=60,
         preview_size=4,
+        renderer_extensions=None,
     ):
         msg = f"Initialising TetrisEnv with width={width}, height={height}, buffer_height={buffer_height}, visible_height={visible_height}, obs_type={obs_type}, render_mode={render_mode}, window_size={window_size}, initial_level={initial_level}, num_lives={num_lives}, render_fps={render_fps}, preview_size={preview_size}"
         print(msg)
@@ -58,6 +59,7 @@ class TetrisEnv(gym.Env):
             render_mode=self.render_mode,
             window_size=self.window_size,
             render_fps=self.render_fps,
+            renderer_extensions=renderer_extensions,
         )
         self.action_space = spaces.Discrete(len(GameAction))
         self.observation_space = self._get_observation_space()

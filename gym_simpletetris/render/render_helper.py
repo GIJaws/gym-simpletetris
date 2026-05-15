@@ -2,7 +2,17 @@ from gym_simpletetris.render.human_renderer import HumanRenderer
 from gym_simpletetris.render.array_renderer import ArrayRenderer
 
 
-def create_renderer(width, height, buffer_height, visible_height, obs_type, render_mode, window_size, render_fps):
+def create_renderer(
+    width,
+    height,
+    buffer_height,
+    visible_height,
+    obs_type,
+    render_mode,
+    window_size,
+    render_fps,
+    renderer_extensions=None,
+):
     if render_mode == "human":
         return HumanRenderer(
             width=width,
@@ -11,6 +21,7 @@ def create_renderer(width, height, buffer_height, visible_height, obs_type, rend
             block_size=window_size // visible_height,
             fps=render_fps,
             visible_height=visible_height,
+            extensions=renderer_extensions,
         )
     elif render_mode in ["rgb_array"]:
         return ArrayRenderer(
