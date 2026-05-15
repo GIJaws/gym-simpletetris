@@ -27,7 +27,7 @@ class RendererExtension(Protocol):
 
     def after_board(self, ctx: RenderContext) -> None: ...
 
-    def before_ui(self, ctx: RenderContext) -> None: ...
+    def before_ui(self, ctx: RenderContext) -> bool | None: ...
 
     def after_ui(self, ctx: RenderContext) -> None: ...
 
@@ -42,8 +42,8 @@ class NoOpRendererExtension:
     def after_board(self, ctx: RenderContext) -> None:
         pass
 
-    def before_ui(self, ctx: RenderContext) -> None:
-        pass
+    def before_ui(self, ctx: RenderContext) -> bool:
+        return False
 
     def after_ui(self, ctx: RenderContext) -> None:
         pass

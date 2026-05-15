@@ -35,9 +35,11 @@ class HumanRenderer(BaseRenderer):
         self._render_blocks(game_state.current_piece.get_render_blocks())
         for extension in tuple(self.extensions):
             extension.after_board(ctx)
+        suppress_base_ui = False
         for extension in tuple(self.extensions):
-            extension.before_ui(ctx)
-        self._render_ui(game_state)
+            suppress_base_ui = bool(extension.before_ui(ctx)) or suppress_base_ui
+        if not suppress_base_ui:
+            self._render_ui(game_state)
         for extension in tuple(self.extensions):
             extension.after_ui(ctx)
 
