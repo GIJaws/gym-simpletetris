@@ -15,7 +15,24 @@ DEFAULT_BUFFER_HEIGHT = 5
 DEFAULT_FILLED_RGB = (180, 180, 180)
 DEFAULT_EMPTY_RGB = (0, 0, 0)
 
-EasyClearsPreset = Literal["single", "tetris", "easy_single", "easy_tetris"]
+EasyClearsPreset = Literal[
+    "single",
+    "tetris",
+    "easy_single",
+    "easy_tetris",
+    "easy_single_loose",
+    "easy_single_strict",
+    "easy_tetris_loose",
+    "easy_tetris_strict",
+    "super_easy_tetris",
+]
+EasyClearsMode = Literal[
+    "easy_single_loose",
+    "easy_single_strict",
+    "easy_tetris_loose",
+    "easy_tetris_strict",
+    "super_easy_tetris",
+]
 GapPolicy = Literal["varied", "same_column"]
 Grid = NDArray[np.uint8]
 
@@ -130,33 +147,49 @@ def easy_clears(
     n_rows: int = 4,
     gap_policy: GapPolicy | None = None,
 ) -> Grid:
-    """Limited prepared-board generator for current easy single/tetris starts.
+    """Build prepared boards for easy line-clear curriculum starts.
 
-    Supported now:
-    - clear_sizes=[1], preset single/easy_single: bottom rows each have one gap.
-    - clear_sizes=[4], preset tetris/easy_tetris: bottom four rows share one gap.
+    Supported presets:
+    - single/easy_single/easy_single_strict: one gap per row, no adjacent
+      rows use the same gap column. Existing aliases map here.
+    - easy_single_loose: one independent random gap per row; rows may align.
+    - tetris/easy_tetris/super_easy_tetris: one shared gap for all requested
+      rows. Existing tetris aliases map here.
+    - easy_tetris_loose: four-row groups share a gap; group gaps may repeat.
+    - easy_tetris_strict: four-row groups share a gap; adjacent groups avoid
+      the same gap column.
     """
     _validate_dimensions(width, height, buffer_height)
     if n_rows < 1:
         raise ValueError("n_rows must be >= 1")
 
     normalized_sizes = tuple(int(size) for size in clear_sizes)
-    kind = _resolve_easy_clears_kind(normalized_sizes, preset)
-    policy = gap_policy or ("same_column" if kind == "tetris" else "varied")
-    if kind == "single" and policy != "varied":
-        raise ValueError("single easy_clears currently supports only gap_policy='varied'")
-    if kind == "tetris" and policy != "same_column":
-        raise ValueError("tetris easy_clears currently supports only gap_policy='same_column'")
+    mode = _resolve_easy_clears_mode(normalized_sizes, preset, gap_policy)
 
     generator = _coerce_rng(seed=seed, rng=rng)
     total_height = height + buffer_height
     grid = np.zeros((total_height, width), dtype=np.uint8)
+    row_count = min(int(n_rows), height)
 
-    if kind == "single":
-        row_count = min(int(n_rows), height)
-        gap_columns = _varied_gap_columns(width, row_count, generator)
+    if mode == "easy_single_loose":
+        gap_columns = _loose_gap_columns(width, row_count, generator)
+    elif mode == "easy_single_strict":
+        gap_columns = _strict_single_gap_columns(width, row_count, generator)
+    elif mode == "easy_tetris_loose":
+        gap_columns = _grouped_tetris_gap_columns(
+            width,
+            row_count,
+            generator,
+            avoid_adjacent_groups=False,
+        )
+    elif mode == "easy_tetris_strict":
+        gap_columns = _grouped_tetris_gap_columns(
+            width,
+            row_count,
+            generator,
+            avoid_adjacent_groups=True,
+        )
     else:
-        row_count = 4
         gap_column = int(generator.integers(0, width))
         gap_columns = [gap_column] * row_count
 
@@ -178,11 +211,16 @@ def easy_clears_preset(
     rng: np.random.Generator | None = None,
     n_rows: int = 4,
 ) -> Grid:
-    """Named facade for limited easy_clears presets."""
-    if kind in ("single", "easy_single"):
+    """Named facade for easy_clears presets."""
+    if kind in (
+        "single",
+        "easy_single",
+        "easy_single_loose",
+        "easy_single_strict",
+    ):
         return easy_clears(
             clear_sizes=[1],
-            preset="single",
+            preset=kind,
             width=width,
             height=height,
             buffer_height=buffer_height,
@@ -190,15 +228,22 @@ def easy_clears_preset(
             rng=rng,
             n_rows=n_rows,
         )
-    if kind in ("tetris", "easy_tetris"):
+    if kind in (
+        "tetris",
+        "easy_tetris",
+        "easy_tetris_loose",
+        "easy_tetris_strict",
+        "super_easy_tetris",
+    ):
         return easy_clears(
             clear_sizes=[4],
-            preset="tetris",
+            preset=kind,
             width=width,
             height=height,
             buffer_height=buffer_height,
             seed=seed,
             rng=rng,
+            n_rows=n_rows,
         )
     raise ValueError(f"unsupported easy clears preset: {kind!r}")
 
@@ -216,34 +261,95 @@ def _coerce_rng(*, seed: int | None, rng: np.random.Generator | None) -> np.rand
     return rng if rng is not None else np.random.default_rng(seed)
 
 
-def _resolve_easy_clears_kind(
+def _resolve_easy_clears_mode(
     clear_sizes: tuple[int, ...],
     preset: EasyClearsPreset | None,
-) -> Literal["single", "tetris"]:
-    if preset in ("single", "easy_single"):
+    gap_policy: GapPolicy | None,
+) -> EasyClearsMode:
+    if preset in ("single", "easy_single", "easy_single_strict"):
         if clear_sizes != (1,):
             raise ValueError("single easy_clears requires clear_sizes=[1]")
-        return "single"
-    if preset in ("tetris", "easy_tetris"):
+        if gap_policy not in (None, "varied"):
+            raise ValueError("single easy_clears requires gap_policy='varied'")
+        return "easy_single_strict"
+    if preset == "easy_single_loose":
+        if clear_sizes != (1,):
+            raise ValueError("easy_single_loose easy_clears requires clear_sizes=[1]")
+        if gap_policy not in (None, "varied"):
+            raise ValueError("easy_single_loose easy_clears requires gap_policy='varied'")
+        return "easy_single_loose"
+    if preset in ("tetris", "easy_tetris", "super_easy_tetris"):
         if clear_sizes != (4,):
             raise ValueError("tetris easy_clears requires clear_sizes=[4]")
-        return "tetris"
+        if gap_policy not in (None, "same_column"):
+            raise ValueError("tetris easy_clears requires gap_policy='same_column'")
+        return "super_easy_tetris"
+    if preset == "easy_tetris_loose":
+        if clear_sizes != (4,):
+            raise ValueError("easy_tetris_loose easy_clears requires clear_sizes=[4]")
+        if gap_policy not in (None, "same_column"):
+            raise ValueError("easy_tetris_loose easy_clears requires gap_policy='same_column'")
+        return "easy_tetris_loose"
+    if preset == "easy_tetris_strict":
+        if clear_sizes != (4,):
+            raise ValueError("easy_tetris_strict easy_clears requires clear_sizes=[4]")
+        if gap_policy not in (None, "same_column"):
+            raise ValueError("easy_tetris_strict easy_clears requires gap_policy='same_column'")
+        return "easy_tetris_strict"
     if preset is not None:
         raise ValueError(f"unsupported easy clears preset: {preset!r}")
     if clear_sizes == (1,):
-        return "single"
+        if gap_policy not in (None, "varied"):
+            raise ValueError("single easy_clears requires gap_policy='varied'")
+        return "easy_single_strict"
     if clear_sizes == (4,):
-        return "tetris"
+        if gap_policy not in (None, "same_column"):
+            raise ValueError("tetris easy_clears requires gap_policy='same_column'")
+        return "super_easy_tetris"
     raise NotImplementedError(
         "easy_clears currently supports only clear_sizes=[1] and clear_sizes=[4]"
     )
 
 
-def _varied_gap_columns(width: int, row_count: int, rng: np.random.Generator) -> list[int]:
+def _loose_gap_columns(width: int, row_count: int, rng: np.random.Generator) -> list[int]:
+    return [int(rng.integers(0, width)) for _ in range(row_count)]
+
+
+def _strict_single_gap_columns(
+    width: int,
+    row_count: int,
+    rng: np.random.Generator,
+) -> list[int]:
+    if width < 2:
+        raise ValueError("width must be >= 2 for easy_single_strict")
     columns: list[int] = []
     while len(columns) < row_count:
-        columns.extend(int(column) for column in rng.permutation(width))
+        chunk = [int(column) for column in rng.permutation(width)]
+        if columns and chunk[0] == columns[-1]:
+            chunk[0], chunk[1] = chunk[1], chunk[0]
+        columns.extend(chunk)
     return columns[:row_count]
+
+
+def _grouped_tetris_gap_columns(
+    width: int,
+    row_count: int,
+    rng: np.random.Generator,
+    *,
+    avoid_adjacent_groups: bool,
+) -> list[int]:
+    if avoid_adjacent_groups and width < 2:
+        raise ValueError("width must be >= 2 for easy_tetris_strict")
+
+    columns: list[int] = []
+    previous_gap: int | None = None
+    while len(columns) < row_count:
+        gap = int(rng.integers(0, width))
+        if avoid_adjacent_groups and previous_gap is not None and gap == previous_gap:
+            gap = (gap + 1 + int(rng.integers(0, width - 1))) % width
+        columns.extend([gap] * min(4, row_count - len(columns)))
+        previous_gap = gap
+    return columns
 
 
 def _validate_dimensions(width: int, height: int, buffer_height: int) -> None:
