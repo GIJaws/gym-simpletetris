@@ -134,9 +134,19 @@ class GameState:
         Update the score and level based on lines cleared.
         """
         scoring = {0: 0, 1: 100, 2: 300, 3: 500, 4: 800}
-        new_step_score = (
-            self.step_score + scoring[self.step_lines_cleared]
-        )  # TODO lets see if this ever results in an error
+        # Safety net: extend scoring beyond standard 0-4 line clears via
+        # linear extrapolation past Tetris. Multi-line clears > 4 are
+        # impossible from a single piece placement in standard Tetris,
+        # but injected curriculum start states (used by the trainer's
+        # easy_* curriculum modes) can present pre-completed rows that
+        # all clear simultaneously on the first observation — don't
+        # KeyError, just score them.
+        cleared = int(self.step_lines_cleared)
+        if cleared in scoring:
+            score_delta = scoring[cleared]
+        else:
+            score_delta = 800 + 400 * max(0, cleared - 4)
+        new_step_score = self.step_score + score_delta
         new_level = self.level
         new_gravity_interval = self.gravity_interval
 
